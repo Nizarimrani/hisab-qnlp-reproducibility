@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.env
+.env.*
+!.env.example
+results/reference/*.json
+!results/reference/.gitkeep
+!results/reference/aer_reference.json
