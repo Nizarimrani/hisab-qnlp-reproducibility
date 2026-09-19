@@ -1,0 +1,75 @@
+{
+  "circuit": {
+    "depth": 46,
+    "num_qubits": 9,
+    "operation_counts": {
+      "ccx": 4,
+      "crz": 6,
+      "cx": 10,
+      "h": 14,
+      "measure": 9,
+      "ry": 1,
+      "rz": 5,
+      "s": 4,
+      "sdg": 4,
+      "t": 4,
+      "tdg": 4,
+      "x": 3
+    },
+    "size": 68
+  },
+  "config": {
+    "concession_phase": 1.2,
+    "consequent_steps": 3,
+    "factuality_probability": 0.8,
+    "optimization_level": 0,
+    "premise_steps": 5,
+    "seed_simulator": 20260919,
+    "seed_transpiler": 20260919,
+    "shots": 4096,
+    "theta_redden": 0.3,
+    "theta_sun": 0.35
+  },
+  "counts": {
+    "000100101": 792,
+    "000100111": 24,
+    "000101001": 2,
+    "000101011": 31,
+    "000110101": 3071,
+    "000110111": 90,
+    "100111011": 24,
+    "101111001": 1,
+    "101111011": 16,
+    "110111011": 19,
+    "111111011": 26
+  },
+  "experiment_id": "concession-polarity-factuality-v1",
+  "metrics": {
+    "joint_inference_red": {
+      "00": 0.97900390625,
+      "01": 0.0,
+      "10": 0.010498046875,
+      "11": 0.010498046875
+    },
+    "joint_premise_factuality": {
+      "00": 0.19921875,
+      "01": 0.771728515625,
+      "10": 0.008056640625,
+      "11": 0.02099609375
+    },
+    "p_factuality": 0.792724609375,
+    "p_inference": 0.02099609375,
+    "p_premise_truth": 0.029052734375,
+    "p_red": 0.010498046875,
+    "p_red_given_inference": 0.5,
+    "p_red_given_no_inference": 0.0,
+    "premise_entropy_bits": 0.1896740631798627,
+    "shots": 4096
+  },
+  "schema_version": "1.0",
+  "sentence_es": "Aunque no salga el sol lentamente, es muy probable (80%) que el tomate enrojezca r\u00e1pidamente.",
+  "software": {
+    "qiskit": "2.3.0",
+    "qiskit_aer": "0.17.2"
+  }
+}
