@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If this software supports research, cite this repository."
+title: "Hisab QNLP Reproducibility"
+type: software
+authors:
+  - family-names: "El Imrani"
+    given-names: "Nizar"
+version: 0.1.0
+date-released: 2026-09-19
+repository-code: "https://github.com/Nizarimrani/hisab-qnlp-reproducibility"
+url: "https://novareason.org/article/neurocognitive-quantum-hyperspace-natural-language"
+license: MIT
