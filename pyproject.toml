@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hisab-qnlp-reproducibility"
+version = "0.1.0"
+description = "Reproducible Qiskit reference for compositional quantum semantics"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = {text = "MIT"}
+authors = [{name = "Nizar El Imrani"}]
+dependencies = [
+  "qiskit==2.3.0",
+  "qiskit-aer==0.17.2",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
