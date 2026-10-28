@@ -972,7 +972,7 @@ def run_benchmark(
         "",
         "## Exact-boundary span evaluation",
         "",
-        "Span precision/recall/F1 require exact start and end token boundaries; a scope that is one token too short does not count as an exact match. These are contiguous token-tag spans, so they do not yet score BRAT discontinuous relations as unified multi-part spans.",
+        "Span precision/recall/F1 require exact start and end token boundaries; a scope that is one token too short does not count as an exact match. These columns score contiguous token-tag runs; the separate linked-target metric below retains all segments of each original BRAT scope entity.",
         "",
         "| Model | Cue span exact F1 | Scope span exact F1 |",
         "|---|---:|---:|",
