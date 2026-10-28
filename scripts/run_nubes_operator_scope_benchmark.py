@@ -428,11 +428,11 @@ def scope_from_cue_tags(
 
 
 def split_by_document(
-    documents: list[dict[str, Any]], test_fraction: float
+    documents: list[dict[str, Any]], test_fraction: float, seed: int = SEED
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Stable held-out-document split; no token from one file crosses splits."""
     ordered = sorted(documents, key=lambda item: item["doc_id"])
-    random.Random(SEED).shuffle(ordered)
+    random.Random(seed).shuffle(ordered)
     test_count = max(1, round(len(ordered) * test_fraction))
     train, test = ordered[test_count:], ordered[:test_count]
     if not train or not test:
@@ -451,7 +451,12 @@ def flatten(documents: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list
     return features, labels
 
 
-def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.20) -> dict[str, Any]:
+def run_benchmark(
+    corpus_dir: Path,
+    output_dir: Path,
+    test_fraction: float = 0.20,
+    seed: int = SEED,
+) -> dict[str, Any]:
     from sklearn.dummy import DummyClassifier
     from sklearn.feature_extraction import DictVectorizer
     from sklearn.metrics import accuracy_score, classification_report, f1_score
@@ -475,7 +480,7 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
             "expected multiple NUBes SAMPLE-001 text/annotation pairs."
         )
 
-    train_docs, test_docs = split_by_document(documents, test_fraction)
+    train_docs, test_docs = split_by_document(documents, test_fraction, seed=seed)
     x_train, y_train = flatten(train_docs)
     x_test, y_test = flatten(test_docs)
     train_counts, test_counts = Counter(y_train), Counter(y_test)
@@ -486,7 +491,7 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
         )),
         ("contextual_linear_svc", make_pipeline(
             DictVectorizer(sparse=True),
-            LinearSVC(class_weight="balanced", random_state=SEED, max_iter=10000)
+            LinearSVC(class_weight="balanced", random_state=seed, max_iter=10000)
         )),
     ]
 
@@ -749,7 +754,7 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
             "test_label_counts": {label: test_counts[label] for label in LABELS},
             "split": "deterministic held-out documents; token-level random splitting avoided",
             "test_fraction_target": test_fraction,
-            "seed": SEED,
+            "seed": seed,
         },
         "models": model_metrics,
         "operator_composition_validation": composition_validation,
@@ -855,10 +860,11 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", type=Path, default=Path("results/nubes_operator_scope"))
     parser.add_argument("--test-fraction", type=float, default=0.20)
+    parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args()
     if not 0.05 <= args.test_fraction <= 0.5:
         parser.error("--test-fraction must be between 0.05 and 0.5")
-    report = run_benchmark(args.corpus_dir, args.output_dir, args.test_fraction)
+    report = run_benchmark(args.corpus_dir, args.output_dir, args.test_fraction, seed=args.seed)
     print(json.dumps({
         "benchmark": report["benchmark"],
         "annotated_documents": report["data"]["annotated_documents"],
