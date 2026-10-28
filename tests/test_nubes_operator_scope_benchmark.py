@@ -10,6 +10,7 @@ from scripts.run_nubes_operator_scope_benchmark import (  # noqa: E402
     load_document,
     parse_brat,
     split_by_document,
+    scope_from_cue_tags,
     token_features,
 )
 
@@ -98,3 +99,37 @@ def test_hisab_inspired_pipeline_never_reads_gold_labels():
     for token in altered:
         token["label"] = "UNCERT_CUE" if token["label"] == "O" else "O"
     assert hisab_operator_pipeline(altered) == first
+
+def test_scope_from_predicted_cues_uses_punctuation_boundaries_only():
+    tokens = [
+        {"token": "No", "line": 0},
+        {"token": "presenta", "line": 0},
+        {"token": "fiebre", "line": 0},
+        {"token": ".", "line": 0},
+        {"token": "quizá", "line": 0},
+        {"token": "mejore", "line": 0},
+        {"token": ".", "line": 0},
+    ]
+    cues = ["NEG_CUE", "O", "O", "O", "UNCERT_CUE", "O", "O"]
+    assert scope_from_cue_tags(tokens, cues) == [
+        "NEG_CUE", "NEG_SCOPE", "NEG_SCOPE", "O",
+        "UNCERT_CUE", "UNCERT_SCOPE", "O",
+    ]
+
+
+def test_both_cue_generates_mixed_scope_without_gold_labels():
+    tokens = [
+        {"token": "No", "line": 0, "label": "WRONG"},
+        {"token": "descartado", "line": 0, "label": "WRONG"},
+        {"token": ".", "line": 0, "label": "WRONG"},
+    ]
+    cues = ["BOTH_CUE", "O", "O"]
+    assert scope_from_cue_tags(tokens, cues) == ["BOTH_CUE", "MIXED_SCOPE", "O"]
+
+
+def test_scope_from_cue_tags_rejects_length_mismatch():
+    import pytest
+
+    with pytest.raises(ValueError):
+        scope_from_cue_tags([{"token": "No", "line": 0}], [])
+
