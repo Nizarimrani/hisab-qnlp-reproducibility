@@ -125,13 +125,19 @@ def configurations():
         for topology in TOPOLOGIES:
             for layers in (1,2,4):
                 for seed in (11,29): yield n,topology,layers,seed
+    # Replicate the scaling frontier across independent deterministic seeds.
+    # Dense 26-qubit circuits are expensive; three seeds quantify variability.
     for topology in TOPOLOGIES:
         for layers in ((1,2,4) if topology!="all_to_all" else (1,2)):
-            yield 20,topology,layers,11
+            for seed in (11,29,47):
+                yield 20,topology,layers,seed
     for n in (22,24,26):
         for topology in ("local","nearest"):
-            for layers in (1,2,4): yield n,topology,layers,11
-        yield n,"all_to_all",1,11
+            for layers in (1,2,4):
+                for seed in (11,29,47):
+                    yield n,topology,layers,seed
+        for seed in (11,29,47):
+            yield n,"all_to_all",1,seed
 
 def evaluate(n,topology,layers,seed,backend):
     row={k:"" for k in FIELDS}
