@@ -80,6 +80,7 @@ def test_factuality_controls_activation_probability():
         row for row in rows
         if (bool(row["premise_truth"]) ^ bool(row["negated"]))
         and row["aspect_stage"] == 1
+        and row["concession"] == 0
     ]
     assert sorted(row["factuality_probability"] for row in eligible) == [0.2, 0.2, 0.5, 0.5, 0.8, 0.8]
     for row in eligible:
