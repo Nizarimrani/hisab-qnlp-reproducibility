@@ -225,7 +225,12 @@ def parse_brat(ann_path: Path) -> tuple[list[dict[str, Any]], list[tuple[str, in
 def load_document(text_path: Path) -> dict[str, Any]:
     ann_path = text_path.with_suffix(".ann")
     text = text_path.read_text(encoding="utf-8")
-    cues, scopes = parse_brat(ann_path) if ann_path.exists() else ([], [])
+    cues, scope_targets = parse_brat_detailed(ann_path) if ann_path.exists() else ([], [])
+    scopes = [
+        (scope["category"], int(start), int(end), scope["relation_type"])
+        for scope in scope_targets
+        for start, end in scope["target_segments"]
+    ]
     tokens: list[dict[str, Any]] = []
     line_offset = 0
 
@@ -236,7 +241,10 @@ def load_document(text_path: Path) -> dict[str, Any]:
             cue_categories = {
                 ("NEG" if entity["type"] in NEG_CUE_TYPES else "UNCERT")
                 for entity in cues
-                if start < int(entity["end"]) and end > int(entity["start"])
+                if any(
+                    start < int(segment_end) and end > int(segment_start)
+                    for segment_start, segment_end in entity["segments"]
+                )
             }
             scope_categories = {
                 category for category, scope_start, scope_end, _ in scopes
@@ -261,7 +269,20 @@ def load_document(text_path: Path) -> dict[str, Any]:
                 "label": label,
             })
         line_offset += len(line)
-    return {"doc_id": text_path.stem, "tokens": tokens}
+    return {
+        "doc_id": text_path.stem,
+        "tokens": tokens,
+        "brat_scope_targets": [
+            {
+                "target_id": scope["target_id"],
+                "category": scope["category"],
+                "target_segments": [
+                    (int(start), int(end)) for start, end in scope["target_segments"]
+                ],
+            }
+            for scope in scope_targets
+        ],
+    }
 
 
 def token_features(tokens: list[dict[str, Any]], index: int) -> dict[str, Any]:
