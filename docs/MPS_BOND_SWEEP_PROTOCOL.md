@@ -2,24 +2,36 @@
 
 ## Objective
 
-Test whether increasing the maximum MPS bond dimension reduces the discrepancy observed on dense all-to-all circuits, and measure the additional runtime. This is a follow-up to the completed 84-circuit comparison at `chi <= 128`.
-
-## Initial resource-bounded sweep
-
-- 24 qubits, all-to-all topology, one logical layer: bond dimensions 128, 256 and 512; seeds 11, 29 and 47 at 128 and 256; one seed (11) at 512 as an initial feasibility probe.
-- 26 qubits, all-to-all topology, one logical layer: bond dimensions 128 and 256; seeds 11, 29 and 47.
-- The 128-cap runs are repeated as a controlled anchor using the same runner and code path.
-
-The 26-qubit, 512-bond-dimension configuration is intentionally excluded from this first sweep. It can be considered only after timing and memory implications of the smaller staged runs are reviewed.
+Test whether increasing the maximum MPS bond dimension reduces the discrepancy observed on dense all-to-all circuits, and measure the extra runtime. This follows the completed comparison at `chi <= 128` and the staged tests at `chi = 256`.
 
 ## Matched comparison
 
-Each run builds one deterministic synthetic circuit, transpires it once to the shared MPS-compatible basis `{ry, rz, cx, h}`, then computes identical expectation values using Aer statevector and MPS backends. The observables are every local `Z_i`, every adjacent `Z_i Z_{i+1}`, and the end-to-end `Z_0 Z_{n-1}` correlation.
+Each run builds one deterministic synthetic circuit, transpiles it to the shared MPS-compatible basis `{ry, rz, cx, h}`, then computes identical expectation values using Aer statevector and MPS backends. The observables are all local `Z_i`, all adjacent `Z_i Z_{i+1}`, and the end-to-end `Z_0 Z_{n-1}` correlation.
 
-Metrics include statevector and MPS runtime, their ratio, mean absolute expectation error and maximum absolute expectation error. The statevector reference is computed once per run; each GitHub Actions matrix job is one (qubit count, bond dimension, seed) tuple, allowing errors/timeouts to be isolated rather than lose the entire sweep.
+The statevector stage completes first. Its runtime, observable values, and a machine-readable checkpoint are written before MPS starts. The MPS simulation runs in a child process with a configurable deadline. If the child exceeds that deadline, the runner records `status=mps_timeout`, writes the wall time consumed, keeps the statevector measurements, and exits normally so the artifact can upload. MPS runtime and approximation-error fields stay blank unless MPS actually returns.
 
-## Interpretation
+## Checkpoint files
 
-Increasing `chi` may reduce truncation error but can substantially increase runtime and memory. A decrease in these selected-observable errors does not prove convergence of the full state. A slower MPS simulation only compares this MPS configuration to dense statevector on these synthetic circuits. Neither result demonstrates quantum advantage, all-classical hardness, or linguistic validity.
+Each run directory can contain:
 
-Do not launch 26 qubits at `chi=512` automatically. First inspect whether `chi=256` reduces error enough to justify additional cost.
+- `result.csv`: one row, overwritten atomically by stage with the latest known status and metrics;
+- `checkpoint.json` and `summary.json`: stage, status, versions, configuration, and interpretation boundary;
+- `statevector_expectations.json`: the reference local Pauli expectations saved before MPS starts;
+- `mps_worker_input.json` and `mps_worker_output.json`: worker handoff and output when available;
+- `REPORT.md`: a human-readable report that marks missing MPS measurements as missing rather than zero.
+
+The output checkpoint is refreshed after circuit transpilation, after statevector, immediately before MPS, and after MPS success, error, or timeout.
+
+## Resource-bounded checkpoint probe
+
+The dedicated checkpoint-recovery workflow tests the 24-qubit, all-to-all, one-layer circuit at `chi=512`, seed 11, with a five-minute MPS deadline. This is an operational recovery probe, not a claim that five minutes suffices to characterize the approximation at `chi=512`. If the deadline is reached, the experiment should deliver the dense statevector reference and a marked timeout, which is still a useful reproducibility result.
+
+The original 13-cell bond sweep is manual-only, to prevent pushes to the runner from unintentionally relaunching a costly matrix. Each high-cost run should be explicitly bounded.
+
+## Interpretation limits
+
+- Both statevector and MPS are classical simulators.
+- Selected Pauli expectation errors are not full-state fidelity.
+- A timeout gives no MPS approximation-error estimate; it only bounds elapsed time on the current runner.
+- Runtime and memory depend on circuit, gate ordering, Qiskit/Aer versions, and runner resources.
+- These synthetic circuits do not establish natural-language validity, classical intractability, or quantum advantage.
