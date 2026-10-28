@@ -17,7 +17,7 @@ The original BRAT annotations are converted to token labels:
 
 Cue labels take priority if the same token also overlaps a scope. The conversion is computed from BRAT entity offsets and relations, not from a cue lexicon or model predictions.
 
-A text-only classical baseline uses current-token, local-context, character prefix/suffix and token-shape features. A majority-class dummy is reported as a no-skill baseline. A third system, `hisab_inspired_lexicon_scope_rules`, applies an explicit cue lexicon and propagates scope to punctuation, line end, or the next cue. It uses token strings and boundaries only; gold annotation labels are not read during inference. This transparent heuristic is a first classical operator-pipeline prototype inspired by Hisab, not the nine-qubit Qiskit circuit. The test split holds out whole text/annotation files to avoid putting tokens from the same file in both train and test.
+A text-only classical baseline uses current-token, local-context, character prefix/suffix and token-shape features. A majority-class dummy is reported as a no-skill baseline. A third system, `hisab_inspired_lexicon_scope_rules`, applies an explicit cue lexicon and propagates scope to punctuation, line end, or the next cue. It uses token strings and boundaries only; gold annotation labels are not read during inference. Its outputs are converted to typed records by `hisab_qnlp.operator_semantics` and passed to a variable-length Qiskit circuit. The test split holds out whole text/annotation files to avoid putting tokens from the same file in both train and test.
 
 ## Reproduce
 
@@ -27,7 +27,7 @@ The workflow fetches the upstream repository at run time without redistributing 
     python -m pip install -e '.[test,benchmark]'
     python scripts/run_nubes_operator_scope_benchmark.py --corpus-dir external/NUBes-negation-uncertainty-biomedical-corpus/NUBes/SAMPLE-001 --output-dir results/nubes_operator_scope
 
-The output contains aggregate counts, class metrics, timings, software versions, and the held-out split details. It deliberately excludes source sentences and per-token predictions.
+The output contains aggregate counts, class metrics, timings, software versions, held-out split details, and a consistency audit comparing typed operator composition with a variable-length Qiskit statevector. The circuit audit uses a declared base truth of true; agreement validates implementation consistency, not semantic correctness. It deliberately excludes source sentences and per-token predictions. See `docs/OPERATOR_SEMANTICS_SCHEMA.md` for the typed interface and gate-level interpretation.
 
 ## Attribution and license
 
@@ -42,5 +42,6 @@ The upstream repository states that NUBes, IULA+, their experiment splits, and a
 - NUBes is biomedical Spanish, not balanced general-domain Spanish.
 - This measures token-level cue/scope detection, not event-level inference, concession semantics, or Hisab's entire architecture.
 - The rule-based pipeline is deliberately a rough first operator mapping; punctuation-bounded scope propagation will not reproduce every long-distance or discontinuous BRAT relation.
-- Both baselines run classically. The result cannot establish quantum advantage, quantum speedup, or an end-to-end Hisab win.
-- A strong next step must validate a specified operator mapping on exactly the same held-out examples and compare performance and total resources with competitive classical methods.
+- The variable-length circuit uses deterministic X gates and a classical statevector simulator. Its agreement with the symbolic reference is a code-consistency check, not a task-level accuracy measure or a quantum advantage result.
+- The existing fixed nine-qubit circuit is not applied to arbitrary documents by this pipeline.
+- No quantum advantage, quantum speedup, or end-to-end Hisab win is demonstrated.
