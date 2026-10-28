@@ -73,6 +73,9 @@ def run_repeated_benchmark(
             "test_documents": report["data"]["test_documents"],
             "train_tokens": report["data"]["train_tokens"],
             "test_tokens": report["data"]["test_tokens"],
+            "corpus_discontinuous_scope_target_entities": report["data"][
+                "discontinuous_brat_scope_target_entities"
+            ],
             "models": by_model,
             "operator_composition_validation": {
                 "typed_operators": report["operator_composition_validation"][
@@ -116,6 +119,9 @@ def run_repeated_benchmark(
         "seed_values": seeds,
         "number_of_splits": len(seeds),
         "test_fraction_target": test_fraction,
+        "discontinuous_brat_scope_target_entities_in_full_subcorpus": (
+            run_records[0]["corpus_discontinuous_scope_target_entities"]
+        ),
         "split_unit": "whole annotated documents; no document crosses train/test within a split",
         "corpus": {
             "name": "NUBes",
@@ -152,6 +158,7 @@ def run_repeated_benchmark(
         "",
         f"- Seeds: {', '.join(str(seed) for seed in seeds)}",
         f"- Number of splits: {len(seeds)}",
+        f"- Discontinuous BRAT scope target entities in the full SAMPLE-001 subcorpus: {report['discontinuous_brat_scope_target_entities_in_full_subcorpus']}",
         f"- Target held-out fraction per split: {test_fraction:.2f}",
         f"- Elapsed time: {report['elapsed_seconds']:.2f} seconds",
         "",
