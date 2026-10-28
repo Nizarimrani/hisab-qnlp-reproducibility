@@ -27,6 +27,7 @@ METRIC_PATHS = {
     ),
     "cue_exact_span_f1": ("exact_span_metrics", "cue_spans", "f1"),
     "scope_exact_span_f1": ("exact_span_metrics", "scope_spans", "f1"),
+    "brat_linked_scope_target_exact_f1": ("brat_linked_scope_metrics", "overall", "f1"),
 }
 
 
