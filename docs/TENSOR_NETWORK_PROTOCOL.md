@@ -11,7 +11,7 @@ This is a controlled simulator comparison, not quantum hardware execution. It is
 
 ## Matched circuit and observables
 
-The runner builds the same circuit family and seeds as `scripts/run_scaling_aer.py`, strips the statevector-only save instruction, and applies one shared transpilation into `{ry, rz, cry, h}`. Both backends then receive that same circuit.
+The runner builds the same circuit family and seeds as `scripts/run_scaling_aer.py`, strips the statevector-only save instruction, and transpiles once into the shared MPS-compatible gate basis `{ry, rz, cx, h}`. This decomposes the original controlled-RY gates into supported one- and two-qubit gates; both backends then receive that identical circuit.
 
 Rather than exporting a (2^n)-amplitude vector from MPS (which would erase much of the memory advantage being tested), both methods calculate the same set of expectation values:
 
