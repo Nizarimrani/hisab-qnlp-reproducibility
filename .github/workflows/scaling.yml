@@ -4,14 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       max_qubits:
-        description: "Maximum qubit count (even). Full default sweep is 24."
+        description: "Maximum qubit count (even). Full default sweep is 26."
         required: true
-        default: "24"
+        default: "26"
         type: choice
         options:
           - "16"
           - "20"
           - "24"
+          - "26"
   push:
     paths:
       - "scripts/run_scaling_aer.py"
@@ -46,7 +47,7 @@ jobs:
         run: pytest
       - name: Run scaling sweep
         env:
-          MAX_QUBITS: "${{ github.event.inputs.max_qubits || '24' }}"
+          MAX_QUBITS: "${{ github.event.inputs.max_qubits || '26' }}"
         run: |
           mkdir -p results/scaling_aer
           python scripts/run_scaling_aer.py --max-qubits "$MAX_QUBITS" --output-dir results/scaling_aer

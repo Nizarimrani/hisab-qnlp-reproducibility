@@ -128,7 +128,7 @@ def configurations():
     for topology in TOPOLOGIES:
         for layers in ((1,2,4) if topology!="all_to_all" else (1,2)):
             yield 20,topology,layers,11
-    for n in (22,24):
+    for n in (22,24,26):
         for topology in ("local","nearest"):
             for layers in (1,2,4): yield n,topology,layers,11
         yield n,"all_to_all",1,11
@@ -167,7 +167,7 @@ def write_csv(path,rows):
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--output-dir",type=Path,default=Path("results/scaling_aer"))
-    parser.add_argument("--max-qubits",type=int,default=24)
+    parser.add_argument("--max-qubits",type=int,default=26)
     args=parser.parse_args()
     backend=AerSimulator(method="statevector",precision="double")
     backend.set_options(max_parallel_threads=2,max_parallel_experiments=1)
