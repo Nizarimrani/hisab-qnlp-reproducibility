@@ -17,7 +17,7 @@ The original BRAT annotations are converted to token labels:
 
 Cue labels take priority if the same token also overlaps a scope. The conversion is computed from BRAT entity offsets and relations, not from a cue lexicon or model predictions.
 
-A text-only classical baseline uses current-token, local-context, character prefix/suffix and token-shape features. A majority-class dummy is reported as a no-skill baseline. The test split holds out whole text/annotation files to avoid putting tokens from the same file in both train and test.
+A text-only classical baseline uses current-token, local-context, character prefix/suffix and token-shape features. A majority-class dummy is reported as a no-skill baseline. A third system, `hisab_inspired_lexicon_scope_rules`, applies an explicit cue lexicon and propagates scope to punctuation, line end, or the next cue. It uses token strings and boundaries only; gold annotation labels are not read during inference. This transparent heuristic is a first classical operator-pipeline prototype inspired by Hisab, not the nine-qubit Qiskit circuit. The test split holds out whole text/annotation files to avoid putting tokens from the same file in both train and test.
 
 ## Reproduce
 
@@ -41,6 +41,6 @@ The upstream repository states that NUBes, IULA+, their experiment splits, and a
 
 - NUBes is biomedical Spanish, not balanced general-domain Spanish.
 - This measures token-level cue/scope detection, not event-level inference, concession semantics, or Hisab's entire architecture.
-- This benchmark does not yet execute Hisab's quantum circuit; the mapping from token/span annotations to Hisab operators still needs a formally specified evaluation.
+- The rule-based pipeline is deliberately a rough first operator mapping; punctuation-bounded scope propagation will not reproduce every long-distance or discontinuous BRAT relation.
 - Both baselines run classically. The result cannot establish quantum advantage, quantum speedup, or an end-to-end Hisab win.
 - A strong next step must validate a specified operator mapping on exactly the same held-out examples and compare performance and total resources with competitive classical methods.
