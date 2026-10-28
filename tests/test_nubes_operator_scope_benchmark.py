@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.run_nubes_repeated_splits import run_repeated_benchmark  # noqa: E402
 from scripts.run_nubes_operator_scope_benchmark import (  # noqa: E402
     hisab_operator_pipeline,
     load_document,
@@ -61,14 +62,19 @@ def test_features_use_local_context_without_gold_label():
     assert "next2" not in features
 
 
-def test_document_split_has_no_file_overlap():
+def test_document_split_has_no_file_overlap_and_is_seeded():
     docs = [
         {"doc_id": f"doc-{i:02d}", "tokens": [{"token": "x", "lower": "x", "line": 0, "label": "O"}]}
-        for i in range(10)
+        for i in range(20)
     ]
-    train, test = split_by_document(docs, 0.2)
+    train, test = split_by_document(docs, 0.2, seed=101)
+    train_repeat, test_repeat = split_by_document(docs, 0.2, seed=101)
+    _, other_test = split_by_document(docs, 0.2, seed=202)
     assert {d["doc_id"] for d in train}.isdisjoint({d["doc_id"] for d in test})
-    assert len(test) == 2
+    assert len(test) == 4
+    assert [d["doc_id"] for d in test] == [d["doc_id"] for d in test_repeat]
+    assert [d["doc_id"] for d in train] == [d["doc_id"] for d in train_repeat]
+    assert {d["doc_id"] for d in other_test} != {d["doc_id"] for d in test}
 
 
 def test_hisab_inspired_pipeline_detects_simple_cues_and_local_scope():
@@ -132,4 +138,57 @@ def test_scope_from_cue_tags_rejects_length_mismatch():
 
     with pytest.raises(ValueError):
         scope_from_cue_tags([{"token": "No", "line": 0}], [])
+
+def test_repeated_split_runner_aggregates_seeded_results(tmp_path, monkeypatch):
+    import scripts.run_nubes_repeated_splits as repeated
+
+    def fake_run_benchmark(corpus_dir, output_dir, test_fraction, seed):
+        model = {
+            "model": "hybrid",
+            "accuracy": seed / 100.0,
+            "macro_f1_all_labels": seed / 100.0,
+            "macro_f1_operator_labels_present_in_test": seed / 100.0,
+            "exact_span_metrics": {
+                "cue_spans": {"f1": seed / 100.0},
+                "scope_spans": {"f1": (seed + 10) / 100.0},
+            },
+        }
+        return {
+            "data": {
+                "train_documents": 8,
+                "test_documents": 2,
+                "train_tokens": 100,
+                "test_tokens": 20,
+            },
+            "models": [model],
+            "operator_composition_validation": {
+                "typed_operators_extracted_from_test_text": 3,
+                "annotated_scope_tokens_evaluated": 4,
+                "circuit_symbolic_checks": 4,
+                "circuit_symbolic_agreements": 4,
+            },
+        }
+
+    monkeypatch.setattr(repeated, "run_benchmark", fake_run_benchmark)
+    report = run_repeated_benchmark(
+        corpus_dir=tmp_path / "unused-corpus",
+        output_dir=tmp_path / "repeated",
+        seeds=[10, 20, 30],
+    )
+    assert report["seed_values"] == [10, 20, 30]
+    assert report["aggregate_metrics"]["hybrid"]["accuracy"]["mean"] == 0.2
+    assert report["aggregate_metrics"]["hybrid"]["accuracy"]["sample_standard_deviation"] == 0.1
+    assert (tmp_path / "repeated" / "REPORT.md").exists()
+    assert (tmp_path / "repeated" / "repeated_split_metrics.json").exists()
+
+
+def test_repeated_split_runner_rejects_duplicate_seeds(tmp_path):
+    import pytest
+
+    with pytest.raises(ValueError, match="unique"):
+        run_repeated_benchmark(
+            corpus_dir=tmp_path / "unused-corpus",
+            output_dir=tmp_path / "repeated",
+            seeds=[7, 7],
+        )
 
