@@ -27,6 +27,109 @@ SCOPE_RELATIONS = {"Scope", "DiscScope"}
 LABELS = ["O", "NEG_CUE", "UNCERT_CUE", "BOTH_CUE", "NEG_SCOPE", "UNCERT_SCOPE", "MIXED_SCOPE"]
 
 
+
+
+CUE_SPAN_LABELS = {"NEG_CUE", "UNCERT_CUE", "BOTH_CUE"}
+SCOPE_SPAN_LABELS = {"NEG_SCOPE", "UNCERT_SCOPE", "MIXED_SCOPE"}
+
+
+def _typed_spans(
+    doc_id: str, labels: list[str], tokens: list[dict[str, Any]], accepted: set[str]
+) -> set[tuple[str, str, int, int]]:
+    """Return maximal contiguous token spans as (doc, label, start, end-exclusive)."""
+    spans: set[tuple[str, str, int, int]] = set()
+    index = 0
+    while index < len(labels):
+        label = labels[index]
+        if label not in accepted:
+            index += 1
+            continue
+        start = index
+        line = int(tokens[index].get("line", 0))
+        index += 1
+        while (
+            index < len(labels)
+            and labels[index] == label
+            and int(tokens[index].get("line", 0)) == line
+        ):
+            index += 1
+        spans.add((doc_id, label, start, index))
+    return spans
+
+
+def exact_span_metrics(
+    documents: list[dict[str, Any]],
+    predictions_by_doc: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Strict exact-boundary span metrics; gold annotations are evaluation-only."""
+    groups = {
+        "cue_spans": CUE_SPAN_LABELS,
+        "scope_spans": SCOPE_SPAN_LABELS,
+    }
+    result: dict[str, Any] = {}
+    for group_name, accepted in groups.items():
+        gold: set[tuple[str, str, int, int]] = set()
+        predicted: set[tuple[str, str, int, int]] = set()
+        for doc in documents:
+            doc_id = str(doc["doc_id"])
+            tokens = doc["tokens"]
+            gold_labels = [str(token["label"]) for token in tokens]
+            predicted_labels = predictions_by_doc[doc_id]
+            if len(predicted_labels) != len(tokens):
+                raise ValueError(f"Prediction length mismatch for {doc_id}")
+            gold |= _typed_spans(doc_id, gold_labels, tokens, accepted)
+            predicted |= _typed_spans(doc_id, predicted_labels, tokens, accepted)
+        exact = gold & predicted
+        per_label: dict[str, Any] = {}
+        for label in sorted(accepted):
+            gold_label = {span for span in gold if span[1] == label}
+            pred_label = {span for span in predicted if span[1] == label}
+            exact_label = gold_label & pred_label
+            precision = len(exact_label) / len(pred_label) if pred_label else 0.0
+            recall = len(exact_label) / len(gold_label) if gold_label else 0.0
+            per_label[label] = {
+                "gold_spans": len(gold_label),
+                "predicted_spans": len(pred_label),
+                "exact_matches": len(exact_label),
+                "precision": precision,
+                "recall": recall,
+                "f1": (
+                    2 * precision * recall / (precision + recall)
+                    if precision + recall else 0.0
+                ),
+            }
+        precision = len(exact) / len(predicted) if predicted else 0.0
+        recall = len(exact) / len(gold) if gold else 0.0
+        result[group_name] = {
+            "gold_spans": len(gold),
+            "predicted_spans": len(predicted),
+            "exact_matches": len(exact),
+            "precision": precision,
+            "recall": recall,
+            "f1": (
+                2 * precision * recall / (precision + recall)
+                if precision + recall else 0.0
+            ),
+            "strict_exact_boundaries": True,
+            "per_label": per_label,
+        }
+    return result
+
+
+def _partition_predictions_by_document(
+    documents: list[dict[str, Any]], predictions: list[str]
+) -> dict[str, list[str]]:
+    by_doc: dict[str, list[str]] = {}
+    offset = 0
+    for doc in documents:
+        count = len(doc["tokens"])
+        by_doc[str(doc["doc_id"])] = predictions[offset:offset + count]
+        offset += count
+    if offset != len(predictions):
+        raise ValueError(f"Expected {offset} predictions, received {len(predictions)}")
+    return by_doc
+
+
 def parse_brat(ann_path: Path) -> tuple[list[dict[str, Any]], list[tuple[str, int, int, str]]]:
     """Return cue entities and scope spans with their semantic category."""
     entities: dict[str, dict[str, Any]] = {}
@@ -337,8 +440,12 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
             y_test, predicted, labels=LABELS, output_dict=True, zero_division=0
         )
         operator_labels = [label for label in LABELS if label != "O" and test_counts[label] > 0]
+        model_span_metrics = exact_span_metrics(
+            test_docs, _partition_predictions_by_document(test_docs, predicted)
+        )
         model_metrics.append({
             "model": name,
+            "exact_span_metrics": model_span_metrics,
             "test_tokens": len(y_test),
             "accuracy": float(accuracy_score(y_test, predicted)),
             "macro_f1_all_labels": float(f1_score(
@@ -379,8 +486,12 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
     operator_labels = [
         label for label in LABELS if label != "O" and test_counts[label] > 0
     ]
+    rule_span_metrics = exact_span_metrics(
+        test_docs, _partition_predictions_by_document(test_docs, rule_predicted)
+    )
     model_metrics.append({
         "model": "hisab_inspired_lexicon_scope_rules",
+        "exact_span_metrics": rule_span_metrics,
         "model_type": "transparent rule-based operator pipeline; classical execution",
         "test_tokens": len(y_test),
         "accuracy": float(accuracy_score(y_test, rule_predicted)),
