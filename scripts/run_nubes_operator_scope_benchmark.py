@@ -130,8 +130,15 @@ def _partition_predictions_by_document(
     return by_doc
 
 
-def parse_brat(ann_path: Path) -> tuple[list[dict[str, Any]], list[tuple[str, int, int, str]]]:
-    """Return cue entities and scope spans with their semantic category."""
+def parse_brat_detailed(
+    ann_path: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Parse cue entities and their linked scope target entities.
+
+    BRAT text-bound entities may contain multiple offset segments separated by
+    semicolons. Segment linkage is retained rather than silently dropping the
+    entity or flattening its discontinuity.
+    """
     entities: dict[str, dict[str, Any]] = {}
     relations: list[tuple[str, str, str]] = []
     with ann_path.open("r", encoding="utf-8") as handle:
@@ -142,14 +149,25 @@ def parse_brat(ann_path: Path) -> tuple[list[dict[str, Any]], list[tuple[str, in
             if line.startswith("T"):
                 try:
                     annotation_id, specification, surface = line.split("\t", 2)
-                    bits = specification.split()
-                    if len(bits) < 3:
+                    entity_type, offset_text = specification.split(maxsplit=1)
+                    segments: list[tuple[int, int]] = []
+                    for raw_segment in offset_text.split(";"):
+                        values = raw_segment.strip().split()
+                        if len(values) != 2:
+                            raise ValueError("Malformed BRAT offset segment")
+                        segment_start, segment_end = int(values[0]), int(values[1])
+                        if segment_start < 0 or segment_end <= segment_start:
+                            raise ValueError("Invalid BRAT offset segment")
+                        segments.append((segment_start, segment_end))
+                    segments.sort()
+                    if not segments:
                         continue
                     entities[annotation_id] = {
                         "id": annotation_id,
-                        "type": bits[0],
-                        "start": int(bits[1]),
-                        "end": int(bits[2]),
+                        "type": entity_type,
+                        "start": segments[0][0],
+                        "end": segments[-1][1],
+                        "segments": segments,
                         "surface": surface,
                     }
                 except (ValueError, IndexError):
@@ -159,16 +177,22 @@ def parse_brat(ann_path: Path) -> tuple[list[dict[str, Any]], list[tuple[str, in
                 if len(pieces) < 2:
                     continue
                 bits = pieces[1].split()
-                if len(bits) >= 3:
-                    relations.append((bits[0], bits[1].split(":", 1)[1],
-                                      bits[2].split(":", 1)[1]))
+                if len(bits) >= 3 and ":" in bits[1] and ":" in bits[2]:
+                    relations.append((
+                        bits[0],
+                        bits[1].split(":", 1)[1],
+                        bits[2].split(":", 1)[1],
+                    ))
 
-    cues = [e for e in entities.values() if e["type"] in NEG_CUE_TYPES | UNCERT_CUE_TYPES]
-    scope_spans: list[tuple[str, int, int, str]] = []
-    for relation_type, arg1, arg2 in relations:
+    cues = [
+        entity for entity in entities.values()
+        if entity["type"] in NEG_CUE_TYPES | UNCERT_CUE_TYPES
+    ]
+    scope_targets: list[dict[str, Any]] = []
+    for relation_type, cue_id, target_id in relations:
         if relation_type not in SCOPE_RELATIONS:
             continue
-        cue, target = entities.get(arg1), entities.get(arg2)
+        cue, target = entities.get(cue_id), entities.get(target_id)
         if not cue or not target:
             continue
         if cue["type"] in NEG_CUE_TYPES:
@@ -177,9 +201,26 @@ def parse_brat(ann_path: Path) -> tuple[list[dict[str, Any]], list[tuple[str, in
             category = "UNCERT"
         else:
             continue
-        scope_spans.append((category, int(target["start"]), int(target["end"]), relation_type))
-    return cues, scope_spans
+        scope_targets.append({
+            "cue_id": cue_id,
+            "target_id": target_id,
+            "category": category,
+            "relation_type": relation_type,
+            "cue_segments": cue["segments"],
+            "target_segments": target["segments"],
+        })
+    return cues, scope_targets
 
+
+def parse_brat(ann_path: Path) -> tuple[list[dict[str, Any]], list[tuple[str, int, int, str]]]:
+    """Backward-compatible segment-expanded view of cue/scope annotations."""
+    cues, scope_targets = parse_brat_detailed(ann_path)
+    scope_spans = [
+        (scope["category"], int(start), int(end), scope["relation_type"])
+        for scope in scope_targets
+        for start, end in scope["target_segments"]
+    ]
+    return cues, scope_spans
 
 def load_document(text_path: Path) -> dict[str, Any]:
     ann_path = text_path.with_suffix(".ann")
