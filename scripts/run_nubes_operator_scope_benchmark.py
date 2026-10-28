@@ -406,6 +406,83 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
         "uses_quantum_circuit": False,
     })
 
+    # Bridge the extracted tags into typed operators, then validate the variable-
+    # length Qiskit encoding against an independent classical composition rule.
+    from hisab_qnlp.operator_semantics import (
+        OperatorType,
+        operators_from_token_tags,
+        validate_composition,
+    )
+
+    composition_start = time.perf_counter()
+    composition_checks = 0
+    composition_agreements = 0
+    composition_scope_tokens = 0
+    composition_operator_count = 0
+    composition_kind_counts: Counter[str] = Counter()
+    composition_qubits_total = 0
+    composition_gates_total = 0
+    composition_max_qubits = 0
+
+    for doc in test_docs:
+        predicted_tags = hisab_operator_pipeline(doc["tokens"])
+        operators = operators_from_token_tags(
+            doc["tokens"], predicted_tags, source="predicted"
+        )
+        composition_operator_count += len(operators)
+        composition_kind_counts.update(op.kind.value for op in operators)
+        target_indices = sorted({
+            target_index
+            for operator in operators
+            for target_index in operator.scope_token_indices
+        })
+        composition_scope_tokens += len(target_indices)
+        for target_index in target_indices:
+            result = validate_composition(
+                base_truth=True,
+                operators=operators,
+                target_token_index=target_index,
+            )
+            composition_checks += 1
+            composition_agreements += int(result["agreement"])
+            composition_qubits_total += int(result["circuit"]["num_qubits"])
+            composition_gates_total += int(result["circuit"]["gate_count"])
+            composition_max_qubits = max(
+                composition_max_qubits, int(result["circuit"]["num_qubits"])
+            )
+
+    composition_seconds = time.perf_counter() - composition_start
+    composition_validation = {
+        "schema": "SemanticOperator v1",
+        "circuit": "variable-length deterministic X-gate circuit",
+        "base_truth_convention": True,
+        "inference_uses_gold_labels": False,
+        "annotated_scope_tokens_evaluated": composition_scope_tokens,
+        "typed_operators_extracted_from_test_text": composition_operator_count,
+        "operator_count_by_type": {
+            kind: composition_kind_counts[kind]
+            for kind in (OperatorType.NEGATION.value, OperatorType.UNCERTAINTY.value)
+        },
+        "circuit_symbolic_checks": composition_checks,
+        "circuit_symbolic_agreements": composition_agreements,
+        "all_checks_agree": composition_checks == composition_agreements,
+        "max_qubits": composition_max_qubits,
+        "mean_qubits_per_check": (
+            composition_qubits_total / composition_checks if composition_checks else None
+        ),
+        "mean_gates_per_check": (
+            composition_gates_total / composition_checks if composition_checks else None
+        ),
+        "elapsed_seconds_including_schema_conversion": composition_seconds,
+        "source_text_redistributed": False,
+        "interpretation": (
+            "This is an implementation-consistency check on predicted scope spans. "
+            "Base truth=True is a declared fixture convention, not gold clinical truth. "
+            "Agreement shows the circuit realizes the defined operator algebra; it does not "
+            "measure semantic correctness on NUBes and does not demonstrate quantum advantage."
+        ),
+    }
+
     corpus_counts = Counter(token["label"] for doc in documents for token in doc["tokens"])
     report = {
         "benchmark": "NUBes SAMPLE-001 operator/scope benchmark: symbolic rules vs contextual LinearSVC",
@@ -441,6 +518,7 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
             "seed": SEED,
         },
         "models": model_metrics,
+        "operator_composition_validation": composition_validation,
         "software": {"python": platform.python_version(), "scikit_learn": version("scikit-learn")},
         "interpretation": {
             "does_not_test_quantum_advantage": True,
@@ -487,6 +565,17 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
             f"| {item['model']} | {item['accuracy']:.4f} | {item['macro_f1_all_labels']:.4f} "
             f"| {score_text} | {item['fit_seconds']:.3f} | {item['predict_seconds']:.3f} |"
         )
+    lines.extend([
+        "",
+        "## Typed operator composition and circuit consistency",
+        "",
+        f"- Typed operators extracted from held-out documents: {composition_operator_count}",
+        f"- Target tokens covered by predicted scopes: {composition_scope_tokens}",
+        f"- Symbolic-versus-circuit checks: {composition_agreements}/{composition_checks}",
+        f"- Maximum circuit width: {composition_max_qubits} qubits",
+        f"- Combined conversion and statevector time: {composition_seconds:.3f} s",
+        "",
+        "These checks use a declared base truth of true and compare a circuit with an independent symbolic rule over the operators predicted from text. They validate implementation consistency only; they are not gold-label semantic accuracy and do not test quantum advantage.",
     lines.extend([
         "",
         "## Attribution and limitations",
