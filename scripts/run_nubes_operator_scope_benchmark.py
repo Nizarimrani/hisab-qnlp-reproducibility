@@ -162,6 +162,7 @@ def hisab_operator_pipeline(tokens: list[dict[str, Any]]) -> list[str]:
         ("al", "parecer"),
         ("sin", "claro"),
         ("no", "claro"),
+        ("puede",),
         ("podría",),
         ("podria",),
         ("podrían",),
