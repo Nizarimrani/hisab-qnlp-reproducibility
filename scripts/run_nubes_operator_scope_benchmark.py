@@ -1054,8 +1054,13 @@ def main() -> None:
                 "accuracy": model["accuracy"],
                 "macro_f1_all_labels": model["macro_f1_all_labels"],
                 "macro_f1_operator_labels_present_in_test": model["macro_f1_operator_labels_present_in_test"],
+                "brat_linked_scope_target_exact_f1": model["brat_linked_scope_metrics"]["overall"]["f1"],
             } for model in report["models"]
         ],
+        "corpus_discontinuous_brat_scope_target_entities": report["data"][
+            "discontinuous_brat_scope_target_entities"
+        ],
+        "seed": report["data"]["seed"],
         "does_not_test_quantum_advantage": True,
     }, indent=2, ensure_ascii=False))
 
