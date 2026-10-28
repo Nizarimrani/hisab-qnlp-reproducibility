@@ -1,0 +1,62 @@
+name: MPS bond-dimension sensitivity sweep
+
+on:
+  # This expensive 13-cell matrix is manual-only. Use the dedicated checkpoint
+  # workflow for timeout-safe diagnostics on especially costly configurations.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bond-sensitivity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        include:
+          - {n_qubits: 24, bond_dimension: 128, seed: 11}
+          - {n_qubits: 24, bond_dimension: 128, seed: 29}
+          - {n_qubits: 24, bond_dimension: 128, seed: 47}
+          - {n_qubits: 24, bond_dimension: 256, seed: 11}
+          - {n_qubits: 24, bond_dimension: 256, seed: 29}
+          - {n_qubits: 24, bond_dimension: 256, seed: 47}
+          - {n_qubits: 24, bond_dimension: 512, seed: 11}
+          - {n_qubits: 26, bond_dimension: 128, seed: 11}
+          - {n_qubits: 26, bond_dimension: 128, seed: 29}
+          - {n_qubits: 26, bond_dimension: 128, seed: 47}
+          - {n_qubits: 26, bond_dimension: 256, seed: 11}
+          - {n_qubits: 26, bond_dimension: 256, seed: 29}
+          - {n_qubits: 26, bond_dimension: 256, seed: 47}
+    name: "n=${{ matrix.n_qubits }}, chi=${{ matrix.bond_dimension }}, seed=${{ matrix.seed }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install pinned Qiskit stack
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Unit tests
+        if: matrix.n_qubits == 24 && matrix.bond_dimension == 128 && matrix.seed == 11
+        run: pytest
+      - name: Run one matched bond-dimension comparison
+        run: |
+          mkdir -p results/mps_bond_sweep
+          python scripts/run_mps_bond_sweep.py \
+            --n-qubits "${{ matrix.n_qubits }}" \
+            --seed "${{ matrix.seed }}" \
+            --bond-dimension "${{ matrix.bond_dimension }}" \
+            --output-dir results/mps_bond_sweep
+      - name: Upload this matrix cell
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mps-bond-sweep-n${{ matrix.n_qubits }}-chi${{ matrix.bond_dimension }}-seed${{ matrix.seed }}
+          path: results/mps_bond_sweep/
+          if-no-files-found: warn
+          retention-days: 90
