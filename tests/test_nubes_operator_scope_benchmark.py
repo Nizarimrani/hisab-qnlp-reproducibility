@@ -164,6 +164,7 @@ def test_repeated_split_runner_aggregates_seeded_results(tmp_path, monkeypatch):
                 "test_documents": 2,
                 "train_tokens": 100,
                 "test_tokens": 20,
+                "discontinuous_brat_scope_target_entities": 0,
             },
             "models": [model],
             "operator_composition_validation": {
