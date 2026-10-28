@@ -6,12 +6,17 @@ import argparse
 import csv
 import json
 import platform
+import sys
 import time
 from pathlib import Path
 
 import qiskit
 import qiskit_aer
 from qiskit import transpile
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from scripts.run_mps_comparison import (
     gate_only_circuit,
