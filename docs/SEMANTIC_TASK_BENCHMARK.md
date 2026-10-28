@@ -1,8 +1,8 @@
-# Structured semantic task benchmark v0
+# Structured semantic task benchmark v0.2
 
 ## Purpose
 
-This is the first task-level validation step beyond circuit-scaling measurements. It defines an exhaustive, small, structured microtask inspired by Hisab's premise polarity, factuality threshold, conditional activation, concession, and event/aspect stages. It checks that a gate-level Qiskit implementation matches an independently written symbolic rule, then compares simple supervised classifiers on a frozen split.
+This is the first task-level validation step beyond circuit-scaling measurements. It defines an exhaustive, small, structured microtask inspired by Hisab's premise polarity, factuality, conditional activation, concession, and event/aspect stages. It checks that a gate-level Qiskit implementation matches an independently written symbolic probability rule, then compares simple supervised classifiers on a frozen split.
 
 This is **not** an open-domain NLP benchmark and does not test a text parser. The Spanish sentences are illustrative realizations; structured feature annotations are supplied directly.
 
@@ -10,28 +10,28 @@ This is **not** an open-domain NLP benchmark and does not test a text parser. Th
 
 The complete factorial design contains 72 cases:
 
-- underlying premise truth: false or true;
+- underlying proposition truth: false or true;
 - polarity: positive or negated;
 - factuality probability: 0.20, 0.50, or 0.80;
 - concession: absent or present;
 - consequent aspect: onset, ongoing, or completed.
 
-Labels are inactive, not_started, ongoing, and completed.
+The categorical semantic-state labels are inactive, not_started, ongoing, and completed. With the balanced factorial design, the label distribution is 36 inactive and 12 for each active aspect.
 
 ## Predeclared target rule
 
 1. Negation toggles the truth value of the underlying proposition: effective premise = premise_truth XOR negated.
-2. The inference branch activates only if the effective premise is true and the factuality probability reaches the high threshold of 0.80.
-3. The concessive marker does not, by itself, cancel consequent activation.
-4. If activation occurs, the aspect input selects the consequent state: onset, ongoing, or completed. Otherwise the output is inactive.
+2. If the effective premise is false, the output is inactive with probability 1.
+3. If the effective premise is true, the factuality probability p is encoded as P(q=1)=p. The output is inactive with probability 1-p and the selected consequent aspect has probability p.
+4. The concessive marker does not, by itself, cancel consequent activation.
 
-These choices define an intentionally simplified task. They are hypotheses for this benchmark, not claims that all natural concessive constructions behave this way or that the target rule is linguistically complete.
+This is a deliberately simplified probabilistic rule inspired by the premise/factuality-controlled inference in the reference circuit. It is not a claim that all concessive constructions behave this way or that the target rule is a complete linguistic theory. The categorical target label is the licensed semantic state; the probability output separately represents factuality.
 
 ## Quantum-circuit encoding
 
-The circuit uses 11 qubits. It encodes the structured input, calculates effective premise truth with two CNOT gates, computes conditional activation with a Toffoli gate, and routes the one-hot aspect into two output bits. Inputs are computational-basis values, so the circuit is a reversible encoding of a deterministic rule. No hardware execution, superposition-based algorithmic benefit, or quantum advantage is claimed.
+The circuit uses 11 qubits. It encodes the structured input, prepares the factuality qubit with an RY angle whose probability of measuring 1 is p, calculates effective premise truth with two CNOT gates, computes conditional activation with a Toffoli gate, and routes the one-hot aspect into two output bits.
 
-The circuit is evaluated with Qiskit's exact statevector simulator. Every one of the 72 possible inputs is compared with the independent symbolic oracle. This agreement is a correctness result, not evidence that the circuit is faster or more expressive than a classical implementation.
+The circuit is evaluated with Qiskit's exact statevector simulator. For every one of the 72 inputs, the four output-status probabilities are compared with the independent symbolic distribution. Agreement is a correctness result, not evidence that the circuit is faster or more expressive than a classical implementation. No hardware execution or quantum advantage is claimed.
 
 ## Classical baselines
 
@@ -42,7 +42,7 @@ A reproducible stratified split uses 54 training examples and 18 test examples, 
 - decision tree;
 - random forest (200 trees, maximum depth 8).
 
-Metrics include test accuracy, macro-F1, fit time, and prediction time. The symbolic oracle is also timed, but it defines the target rule and therefore is a reference implementation rather than a learned competitor.
+Metrics include test accuracy, macro-F1, fit time, and prediction time. The symbolic probability rule is also timed, but it defines the target and therefore is a reference implementation rather than a learned competitor.
 
 ## Reproduce
 
@@ -57,8 +57,8 @@ The run produces semantic_task_dataset.csv, semantic_task_metrics.json, and REPO
 ## Interpretation limits
 
 - The task is synthetic, exhaustively enumerable, and uses supplied feature annotations.
-- The example split is small and single-shot; results do not establish generalization to real text.
-- The target rule is an engineered specification, not an independently annotated linguistic ground truth.
-- Both the circuit and its statevector simulation are classical in execution for this experiment.
+- The supervised test set is small and comes from one fixed split; it does not establish generalization to real text.
+- The target rule is engineered, not independent annotated linguistic ground truth.
+- The circuit is evaluated by a classical statevector simulator.
 - Runtime measurements on the simulator cannot be described as quantum speedup.
-- A stronger next phase needs independently annotated natural-language data, predeclared metrics, robust repeated splits, competitive classical language baselines, and full end-to-end resource accounting.
+- The next phase needs independently annotated natural-language examples, predeclared metrics, repeated splits, competitive classical language baselines, and end-to-end resource accounting.
