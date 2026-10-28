@@ -576,6 +576,8 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
         f"- Combined conversion and statevector time: {composition_seconds:.3f} s",
         "",
         "These checks use a declared base truth of true and compare a circuit with an independent symbolic rule over the operators predicted from text. They validate implementation consistency only; they are not gold-label semantic accuracy and do not test quantum advantage.",
+        "",
+    ])
     lines.extend([
         "",
         "## Attribution and limitations",
