@@ -116,6 +116,92 @@ def exact_span_metrics(
     return result
 
 
+def brat_linked_scope_metrics(
+    documents: list[dict[str, Any]],
+    predictions_by_doc: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Compare predicted contiguous scope runs to original BRAT target entities.
+
+    Gold targets retain their linked list of offset segments. A discontinuous
+    target is one entity with multiple segments, not a set of unrelated spans.
+    The current token-tag systems predict only contiguous runs, so they receive
+    an exact match only when all target segments and boundaries are represented.
+    """
+    gold: set[tuple[str, str, tuple[tuple[int, int], ...]]] = set()
+    discontinuous: set[tuple[str, str, tuple[tuple[int, int], ...]]] = set()
+    predicted: set[tuple[str, str, tuple[tuple[int, int], ...]]] = set()
+
+    for doc in documents:
+        doc_id = str(doc["doc_id"])
+        tokens = doc["tokens"]
+        for target in doc.get("brat_scope_targets", []):
+            token_segments: list[tuple[int, int]] = []
+            for char_start, char_end in target["target_segments"]:
+                indices = [
+                    index for index, token in enumerate(tokens)
+                    if int(token["start"]) < int(char_end)
+                    and int(token["end"]) > int(char_start)
+                ]
+                if indices:
+                    token_segments.append((indices[0], indices[-1] + 1))
+            if not token_segments:
+                continue
+            canonical_segments = tuple(token_segments)
+            target_key = (doc_id, str(target["category"]), canonical_segments)
+            gold.add(target_key)
+            if len(canonical_segments) > 1:
+                discontinuous.add(target_key)
+
+        predicted_labels = predictions_by_doc[doc_id]
+        if len(predicted_labels) != len(tokens):
+            raise ValueError(f"Prediction length mismatch for {doc_id}")
+        scope_runs = _typed_spans(doc_id, predicted_labels, tokens, SCOPE_SPAN_LABELS)
+        for _run_doc_id, label, start, end in scope_runs:
+            categories = (
+                ("NEG", "UNCERT") if label == "MIXED_SCOPE"
+                else ("NEG",) if label == "NEG_SCOPE"
+                else ("UNCERT",)
+            )
+            for category in categories:
+                predicted.add((doc_id, category, ((start, end),)))
+
+    def scores(
+        gold_set: set[tuple[str, str, tuple[tuple[int, int], ...]]],
+        pred_set: set[tuple[str, str, tuple[tuple[int, int], ...]]],
+    ) -> dict[str, Any]:
+        matches = gold_set & pred_set
+        precision = len(matches) / len(pred_set) if pred_set else 0.0
+        recall = len(matches) / len(gold_set) if gold_set else 0.0
+        return {
+            "gold_targets": len(gold_set),
+            "predicted_targets": len(pred_set),
+            "exact_matches": len(matches),
+            "precision": precision,
+            "recall": recall,
+            "f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0,
+        }
+
+    by_category = {
+        category: scores(
+            {target for target in gold if target[1] == category},
+            {target for target in predicted if target[1] == category},
+        )
+        for category in ("NEG", "UNCERT")
+    }
+    return {
+        "definition": "exact match to original BRAT target entity after offset-to-token conversion; linked segments preserved",
+        "overall": scores(gold, predicted),
+        "by_category": by_category,
+        "gold_discontinuous_targets": len(discontinuous),
+        "gold_discontinuous_targets_exactly_matched": len(discontinuous & predicted),
+        "predicted_multi_segment_targets": 0,
+        "limitations": (
+            "The current systems predict contiguous token-tag runs, not linked discontinuous target entities. "
+            "They cannot exactly match a multi-segment BRAT target unless a relation-aware prediction layer is added."
+        ),
+    }
+
+
 def _partition_predictions_by_document(
     documents: list[dict[str, Any]], predictions: list[str]
 ) -> dict[str, list[str]]:
