@@ -1,18 +1,8 @@
 name: MPS bond-dimension sensitivity sweep
 
 on:
-  push:
-    paths:
-      - "scripts/run_mps_bond_sweep.py"
-      - "tests/test_mps_bond_sweep.py"
-      - "docs/MPS_BOND_SWEEP_PROTOCOL.md"
-      - ".github/workflows/mps-bond-sweep.yml"
-  pull_request:
-    paths:
-      - "scripts/run_mps_bond_sweep.py"
-      - "tests/test_mps_bond_sweep.py"
-      - "docs/MPS_BOND_SWEEP_PROTOCOL.md"
-      - ".github/workflows/mps-bond-sweep.yml"
+  # This expensive 13-cell matrix is manual-only. Use the dedicated checkpoint
+  # workflow for timeout-safe diagnostics on especially costly configurations.
   workflow_dispatch:
 
 permissions:
