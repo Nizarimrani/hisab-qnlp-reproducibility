@@ -27,7 +27,7 @@ The workflow fetches the upstream repository at run time without redistributing 
     python -m pip install -e '.[test,benchmark]'
     python scripts/run_nubes_operator_scope_benchmark.py --corpus-dir external/NUBes-negation-uncertainty-biomedical-corpus/NUBes/SAMPLE-001 --output-dir results/nubes_operator_scope
 
-The output contains aggregate counts, class metrics, timings, software versions, held-out split details, and a consistency audit comparing typed operator composition with a variable-length Qiskit statevector. The circuit audit uses a declared base truth of true; agreement validates implementation consistency, not semantic correctness. It deliberately excludes source sentences and per-token predictions. See `docs/OPERATOR_SEMANTICS_SCHEMA.md` for the typed interface and gate-level interpretation.
+The output contains aggregate counts, token-level class metrics, strict exact-boundary cue/scope span metrics, timings, software versions, held-out split details, and a consistency audit comparing typed operator composition with a variable-length Qiskit statevector. Exact-span scoring uses maximal contiguous token-tag runs: a one-token boundary error fails the exact match. It does not yet score a discontinuous BRAT scope as one linked multi-part span. The circuit audit uses a declared base truth of true; agreement validates implementation consistency, not semantic correctness. It deliberately excludes source sentences and per-token predictions. See `docs/OPERATOR_SEMANTICS_SCHEMA.md` for the typed interface and gate-level interpretation.
 
 ## Attribution and license
 
