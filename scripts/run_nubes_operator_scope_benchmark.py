@@ -662,12 +662,13 @@ def run_benchmark(
             y_test, predicted, labels=LABELS, output_dict=True, zero_division=0
         )
         operator_labels = [label for label in LABELS if label != "O" and test_counts[label] > 0]
-        model_span_metrics = exact_span_metrics(
-            test_docs, _partition_predictions_by_document(test_docs, predicted)
-        )
+        model_predictions_by_doc = _partition_predictions_by_document(test_docs, predicted)
+        model_span_metrics = exact_span_metrics(test_docs, model_predictions_by_doc)
+        model_brat_scope_metrics = brat_linked_scope_metrics(test_docs, model_predictions_by_doc)
         model_metrics.append({
             "model": name,
             "exact_span_metrics": model_span_metrics,
+            "brat_linked_scope_metrics": model_brat_scope_metrics,
             "test_tokens": len(y_test),
             "accuracy": float(accuracy_score(y_test, predicted)),
             "macro_f1_all_labels": float(f1_score(
@@ -708,12 +709,13 @@ def run_benchmark(
     operator_labels = [
         label for label in LABELS if label != "O" and test_counts[label] > 0
     ]
-    rule_span_metrics = exact_span_metrics(
-        test_docs, _partition_predictions_by_document(test_docs, rule_predicted)
-    )
+    rule_predictions_by_doc = _partition_predictions_by_document(test_docs, rule_predicted)
+    rule_span_metrics = exact_span_metrics(test_docs, rule_predictions_by_doc)
+    rule_brat_scope_metrics = brat_linked_scope_metrics(test_docs, rule_predictions_by_doc)
     model_metrics.append({
         "model": "hisab_inspired_lexicon_scope_rules",
         "exact_span_metrics": rule_span_metrics,
+        "brat_linked_scope_metrics": rule_brat_scope_metrics,
         "model_type": "transparent rule-based operator pipeline; classical execution",
         "test_tokens": len(y_test),
         "accuracy": float(accuracy_score(y_test, rule_predicted)),
@@ -764,8 +766,10 @@ def run_benchmark(
         y_test, hybrid_predicted, labels=LABELS, output_dict=True, zero_division=0
     )
     hybrid_span_metrics = exact_span_metrics(test_docs, hybrid_predictions_by_doc)
+    hybrid_brat_scope_metrics = brat_linked_scope_metrics(test_docs, hybrid_predictions_by_doc)
     model_metrics.append({
         "model": "contextual_cues_plus_rule_scope",
+        "brat_linked_scope_metrics": hybrid_brat_scope_metrics,
         "model_type": "hybrid: contextual LinearSVC cue predictions + deterministic scope propagation",
         "test_tokens": len(y_test),
         "accuracy": float(accuracy_score(y_test, hybrid_predicted)),
