@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Synthetic structured semantic microtask: exact Qiskit circuit vs classical baselines.
 
-This task validates one explicit operator rule. It is not free-text NLP and
-cannot establish quantum computational advantage.
+This task validates one explicit operator rule and its factuality probability
+encoding. It is not free-text NLP and cannot establish quantum advantage.
 """
 from __future__ import annotations
 
@@ -24,21 +24,42 @@ FACTUALITY_PROBABILITIES = (0.20, 0.50, 0.80)
 ASPECT_NAMES = ("not_started", "ongoing", "completed")
 STATUS_NAMES = ("inactive", *ASPECT_NAMES)
 N_QUBITS = 11
+PROBABILITY_TOLERANCE = 1e-9
+
+
+def probability_to_ry_angle(probability: float) -> float:
+    """Prepare a qubit whose probability of measuring 1 is the given value."""
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError("probability must be in [0, 1]")
+    import math
+    return 2.0 * math.asin(math.sqrt(probability))
 
 
 def symbolic_oracle(row: dict[str, Any]) -> str:
-    """Independent specification for the microtask's target semantics.
+    """Return the licensed semantic state, independently of its confidence.
 
-    Negation toggles underlying proposition truth. The consequent activates
-    only when the resulting premise is true and factuality is at the high
-    0.80 level. Concession does not cancel the consequent. Aspect selects
-    the event stage when active.
+    Negation toggles the underlying proposition truth. If the resulting
+    premise is true, the consequent aspect is licensed; factuality determines
+    the activation probability rather than imposing a hard threshold.
+    Concession does not cancel the consequent.
     """
     effective_premise = bool(row["premise_truth"]) ^ bool(row["negated"])
-    sufficiently_factual = float(row["factuality_probability"]) >= 0.80
-    if not (effective_premise and sufficiently_factual):
+    if not effective_premise:
         return "inactive"
     return ASPECT_NAMES[int(row["aspect_stage"])]
+
+
+def symbolic_distribution(row: dict[str, Any]) -> dict[str, float]:
+    """Specify the output-status distribution for the structured semantics."""
+    distribution = {label: 0.0 for label in STATUS_NAMES}
+    effective_premise = bool(row["premise_truth"]) ^ bool(row["negated"])
+    if not effective_premise:
+        distribution["inactive"] = 1.0
+        return distribution
+    activation_probability = float(row["factuality_probability"])
+    distribution["inactive"] = 1.0 - activation_probability
+    distribution[ASPECT_NAMES[int(row["aspect_stage"])]] = activation_probability
+    return distribution
 
 
 def make_sentence(row: dict[str, Any]) -> str:
@@ -73,15 +94,19 @@ def make_dataset() -> list[dict[str, Any]]:
             "aspect_stage": aspect,
         }
         row["target_label"] = symbolic_oracle(row)
+        distribution = symbolic_distribution(row)
+        row["target_activation_probability"] = 1.0 - distribution["inactive"]
+        row["expected_inactive_probability"] = distribution["inactive"]
+        row["expected_stage_probability"] = row["target_activation_probability"]
         row["sentence_es"] = make_sentence(row)
         rows.append(row)
     return rows
 
 
 def build_task_circuit(row: dict[str, Any]) -> QuantumCircuit:
-    """Encode one structured case into an 11-qubit reversible circuit.
+    """Encode one structured case into an 11-qubit reversible operator circuit.
 
-    q0 premise truth; q1 negation; q2 high-factuality flag; q3 concession;
+    q0 premise truth; q1 negation; q2 factuality amplitude; q3 concession;
     q4..q6 one-hot aspect; q7 effective premise; q8 active inference;
     q9..q10 output status bits (00 inactive, 01 onset, 10 ongoing, 11 done).
     """
@@ -94,20 +119,18 @@ def build_task_circuit(row: dict[str, Any]) -> QuantumCircuit:
         qc.x(premise)
     if int(row["negated"]):
         qc.x(negation)
-    if float(row["factuality_probability"]) >= 0.80:
-        qc.x(factuality)
+    qc.ry(probability_to_ry_angle(float(row["factuality_probability"])), factuality)
     if int(row["concession"]):
         qc.x(concession)
     stage = int(row["aspect_stage"])
     qc.x((stage0, stage1, stage2)[stage])
 
-    # Effective truth is the XOR of underlying truth and negation.
+    # Effective premise truth = underlying truth XOR negation.
     qc.cx(premise, effective)
     qc.cx(negation, effective)
-    # Inference activates only for effective truth AND high factuality.
-    # The concession register is deliberately non-blocking.
+    # The factuality qubit has P(1)=p. Activation is conditional on premise.
     qc.ccx(effective, factuality, active)
-    # Encode active event stage as 01=onset, 10=ongoing, 11=completed.
+    # Encode an active stage as 01=onset, 10=ongoing, 11=completed.
     qc.ccx(active, stage0, out0)
     qc.ccx(active, stage1, out1)
     qc.ccx(active, stage2, out0)
@@ -115,13 +138,15 @@ def build_task_circuit(row: dict[str, Any]) -> QuantumCircuit:
     return qc
 
 
-def run_circuit(row: dict[str, Any]) -> str:
-    """Return the deterministic output label from an exact statevector run."""
+def run_circuit(row: dict[str, Any]) -> dict[str, float]:
+    """Return exact output-status probabilities from the statevector."""
     state = Statevector.from_instruction(build_task_circuit(row))
-    probabilities = state.probabilities()
-    basis_index = max(range(len(probabilities)), key=lambda idx: float(probabilities[idx]))
-    output_code = ((basis_index >> 9) & 1) + 2 * ((basis_index >> 10) & 1)
-    return STATUS_NAMES[output_code]
+    basis_probabilities = state.probabilities()
+    distribution = {label: 0.0 for label in STATUS_NAMES}
+    for basis_index, probability in enumerate(basis_probabilities):
+        output_code = ((basis_index >> 9) & 1) + 2 * ((basis_index >> 10) & 1)
+        distribution[STATUS_NAMES[output_code]] += float(probability)
+    return distribution
 
 
 def save_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -182,14 +207,13 @@ def run_classical_baselines(
     ]
     records: list[dict[str, Any]] = []
     predictions_by_model: dict[str, Any] = {}
-    y_train = [labels[i] for i in train_ids]
     y_test = [labels[i] for i in test_ids]
     x_train = [features[i] for i in train_ids]
     x_test = [features[i] for i in test_ids]
 
     for name, model in models:
         train_start = time.perf_counter()
-        model.fit(x_train, y_train)
+        model.fit(x_train, [labels[i] for i in train_ids])
         train_seconds = time.perf_counter() - train_start
         predict_start = time.perf_counter()
         predicted = list(model.predict(x_test))
@@ -225,21 +249,31 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
     rows = make_dataset()
 
     oracle_start = time.perf_counter()
-    oracle_predictions = [symbolic_oracle(row) for row in rows]
+    oracle_distributions = [symbolic_distribution(row) for row in rows]
     oracle_seconds = time.perf_counter() - oracle_start
 
     circuit_start = time.perf_counter()
-    circuit_predictions = [run_circuit(row) for row in rows]
+    circuit_distributions = [run_circuit(row) for row in rows]
     circuit_seconds = time.perf_counter() - circuit_start
 
-    mismatches = [
-        {"example_id": row["example_id"], "expected": expected, "actual": actual}
-        for row, expected, actual in zip(rows, oracle_predictions, circuit_predictions)
-        if expected != actual
+    errors = [
+        abs(actual[label] - expected[label])
+        for actual, expected in zip(circuit_distributions, oracle_distributions)
+        for label in STATUS_NAMES
     ]
+    mismatches = []
+    for row, actual, expected in zip(rows, circuit_distributions, oracle_distributions):
+        max_error = max(abs(actual[label] - expected[label]) for label in STATUS_NAMES)
+        if max_error > PROBABILITY_TOLERANCE:
+            mismatches.append({
+                "example_id": row["example_id"],
+                "expected": expected,
+                "actual": actual,
+                "max_abs_error": max_error,
+            })
+
     labels = [r["target_label"] for r in rows]
     label_distribution = {name: labels.count(name) for name in STATUS_NAMES}
-
     classical_records, classical_details = run_classical_baselines(rows)
     output_dir.mkdir(parents=True, exist_ok=True)
     save_csv(output_dir / "semantic_task_dataset.csv", rows)
@@ -250,33 +284,33 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
         sklearn_version = "not-installed"
 
     report = {
-        "benchmark": "Hisab-inspired structured semantic microtask v0",
+        "benchmark": "Hisab-inspired structured semantic microtask v0.2",
         "benchmark_type": "synthetic exhaustive rule-validation; not free-text NLP",
         "seed": SEED,
         "dataset": {
             "examples": len(rows),
-            "factorial_design": "2 premise-truth values × 2 polarity values × 3 factuality levels × 2 concession values × 3 aspect stages",
+            "factorial_design": "2 premise-truth values × 2 polarity values × 3 factuality probabilities × 2 concession values × 3 aspect stages",
             "label_distribution": label_distribution,
             "input_features": [
                 "premise_truth", "negated", "factuality_probability",
                 "concession", "aspect_stage"
             ],
             "labels": list(STATUS_NAMES),
-            "factuality_levels": {"0": 0.20, "1": 0.50, "2": 0.80},
+            "factuality_probabilities": {"0": 0.20, "1": 0.50, "2": 0.80},
             "target_rule": (
-                "Effective premise = premise_truth XOR negated; activate only if "
-                "effective premise is true and factuality_probability >= 0.80; "
-                "concession does not cancel the branch; aspect selects onset/ongoing/completed."
+                "Effective premise = premise_truth XOR negated. If effective premise is false, "
+                "the output is inactive with probability 1. If true, the selected aspect is "
+                "activated with probability p and the output is inactive with probability 1-p. "
+                "Concession does not cancel the branch."
             ),
             "important_limit": (
-                "The Spanish sentences are illustrative realizations. Features are supplied "
-                "gold annotations; the experiment does not parse text."
+                "Spanish sentences are illustrative realizations. Features are supplied gold "
+                "annotations; this experiment does not parse text."
             ),
         },
         "semantic_reference": {
-            "implementation": "direct symbolic oracle",
+            "implementation": "direct symbolic oracle for output probability distribution",
             "seconds_for_72_examples": oracle_seconds,
-            "accuracy_against_defined_rule": 1.0,
             "is_independent_of_quantum_circuit": True,
         },
         "qiskit_exact_circuit": {
@@ -284,8 +318,9 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
             "examples": len(rows),
             "qubits": N_QUBITS,
             "seconds_for_72_examples": circuit_seconds,
-            "accuracy_against_symbolic_oracle": 1.0 - len(mismatches) / len(rows),
-            "mismatches": mismatches,
+            "mean_absolute_output_probability_error": sum(errors) / len(errors),
+            "max_absolute_output_probability_error": max(errors, default=0.0),
+            "mismatches_over_tolerance": mismatches,
             "hardware_execution": False,
             "full_statevector_exact": True,
         },
@@ -316,17 +351,16 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
     )
 
     lines = [
-        "# Structured semantic microtask v0",
+        "# Structured semantic microtask v0.2",
         "",
         "**Scope:** exhaustive synthetic rule-validation, not free-text NLP and not a quantum-advantage test.",
         "",
         f"- Examples: {len(rows)}",
         f"- Label counts: {json.dumps(label_distribution, sort_keys=True)}",
         f"- Qubits in encoded circuit: {N_QUBITS}",
-        f"- Circuit/oracle agreement: {len(rows) - len(mismatches)}/{len(rows)} "
-        f"({100 * (1 - len(mismatches) / len(rows)):.1f}%)",
+        f"- Max error in output probabilities: {max(errors, default=0.0):.3e}",
         f"- Statevector simulator runtime for all examples: {circuit_seconds:.6f} s",
-        f"- Symbolic rule runtime for all examples: {oracle_seconds:.6f} s",
+        f"- Symbolic reference runtime for all examples: {oracle_seconds:.6f} s",
         "",
         "## Classical machine-learning baselines",
         "",
@@ -342,10 +376,10 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
         "",
         "## Interpretation",
         "",
-        "The circuit/oracle match checks that the gate-level encoding implements the stated toy rule.",
-        "The supervised models use one deterministic stratified split. The corpus is small and synthetic and cannot support claims about general language understanding.",
+        "The circuit's output distribution is compared for every input against an independent symbolic probability rule.",
+        "The supervised models predict the licensed semantic state on one deterministic stratified split. The corpus is small and synthetic.",
         "",
-        "**No quantum computational advantage is demonstrated.** Both the circuit and the classical ML baselines run on a classical CPU; the symbolic rule is an exact classical solution to the defined task. Do not interpret simulator wall times as a quantum speedup.",
+        "**No quantum computational advantage is demonstrated.** The circuit and its statevector simulation run on a classical CPU; the symbolic rule is an exact classical reference. Do not interpret simulator wall times as quantum speedup.",
         "",
     ])
     (output_dir / "REPORT.md").write_text("\n".join(lines), encoding="utf-8")
@@ -360,13 +394,13 @@ def main() -> None:
     print(json.dumps({
         "benchmark": report["benchmark"],
         "examples": report["dataset"]["examples"],
-        "circuit_accuracy": report["qiskit_exact_circuit"]["accuracy_against_symbolic_oracle"],
-        "mismatches": len(report["qiskit_exact_circuit"]["mismatches"]),
+        "max_probability_error": report["qiskit_exact_circuit"]["max_absolute_output_probability_error"],
+        "mismatches": len(report["qiskit_exact_circuit"]["mismatches_over_tolerance"]),
         "computational_advantage_demonstrated": report["interpretation"]["computational_advantage_demonstrated"],
         "output_dir": str(args.output_dir),
     }, indent=2))
-    if report["qiskit_exact_circuit"]["mismatches"]:
-        raise SystemExit("Circuit disagrees with symbolic oracle; inspect the report.")
+    if report["qiskit_exact_circuit"]["mismatches_over_tolerance"]:
+        raise SystemExit("Circuit disagrees with symbolic probability rule; inspect report.")
 
 
 if __name__ == "__main__":
