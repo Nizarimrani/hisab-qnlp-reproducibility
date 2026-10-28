@@ -56,7 +56,7 @@ def test_features_use_local_context_without_gold_label():
     assert features["w"] == "presenta"
     assert features["prev"] == "no"
     assert features["next"] == "fiebre"
-    assert features["next2"] not in features
+    assert "next2" not in features
 
 
 def test_document_split_has_no_file_overlap():
