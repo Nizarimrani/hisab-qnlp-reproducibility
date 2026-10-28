@@ -16,7 +16,10 @@ on:
   push:
     paths:
       - "scripts/run_scaling_aer.py"
+      - "scripts/project_statevector_scaling.py"
+      - "docs/COMPUTATIONAL_ADVANTAGE_PROJECTION.md"
       - "tests/test_scaling_aer.py"
+      - "tests/test_project_statevector_scaling.py"
       - ".github/workflows/scaling.yml"
       - "pyproject.toml"
   pull_request:
@@ -51,11 +54,18 @@ jobs:
         run: |
           mkdir -p results/scaling_aer
           python scripts/run_scaling_aer.py --max-qubits "$MAX_QUBITS" --output-dir results/scaling_aer
-      - name: Upload benchmark results
+      - name: Project asymptotic statevector resources
+        run: |
+          python scripts/project_statevector_scaling.py \
+            --input-csv results/scaling_aer/scaling_results.csv \
+            --output-dir results/asymptotic_projection
+      - name: Upload benchmark and projection results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hisab-qiskit-aer-scaling-${{ github.run_number }}
-          path: results/scaling_aer/
+          path: |
+            results/scaling_aer/
+            results/asymptotic_projection/
           if-no-files-found: warn
           retention-days: 90
