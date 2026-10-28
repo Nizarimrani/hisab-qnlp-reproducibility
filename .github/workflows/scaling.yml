@@ -55,6 +55,7 @@ jobs:
           mkdir -p results/scaling_aer
           python scripts/run_scaling_aer.py --max-qubits "$MAX_QUBITS" --output-dir results/scaling_aer
       - name: Project asymptotic statevector resources
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.max_qubits == '26' }}
         run: |
           python scripts/project_statevector_scaling.py \
             --input-csv results/scaling_aer/scaling_results.csv \
