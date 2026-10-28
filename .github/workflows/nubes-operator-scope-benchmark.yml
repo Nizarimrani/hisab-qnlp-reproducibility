@@ -1,0 +1,64 @@
+name: NUBes operator and scope benchmark
+
+on:
+  push:
+    paths:
+      - "scripts/run_nubes_operator_scope_benchmark.py"
+      - "scripts/run_nubes_repeated_splits.py"
+      - "tests/test_nubes_operator_scope_benchmark.py"
+      - "docs/NUBES_OPERATOR_SCOPE_BENCHMARK.md"
+      - ".github/workflows/nubes-operator-scope-benchmark.yml"
+      - "pyproject.toml"
+  pull_request:
+    paths:
+      - "scripts/run_nubes_operator_scope_benchmark.py"
+      - "tests/test_nubes_operator_scope_benchmark.py"
+      - "docs/NUBES_OPERATOR_SCOPE_BENCHMARK.md"
+      - ".github/workflows/nubes-operator-scope-benchmark.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nubes-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install pinned project and benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,benchmark]'
+      - name: Run test suite
+        run: pytest
+      - name: Fetch upstream corpus with LFS smudge disabled
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+        run: |
+          git clone --depth 1 https://github.com/Vicomtech/NUBes-negation-uncertainty-biomedical-corpus.git external/NUBes-negation-uncertainty-biomedical-corpus
+          test -d external/NUBes-negation-uncertainty-biomedical-corpus/NUBes/SAMPLE-001
+      - name: Run held-out-document scope benchmark
+        run: |
+          python scripts/run_nubes_operator_scope_benchmark.py \
+            --corpus-dir external/NUBes-negation-uncertainty-biomedical-corpus/NUBes/SAMPLE-001 \
+            --output-dir results/nubes_operator_scope
+      - name: Run repeated document-grouped splits
+        run: |
+          python scripts/run_nubes_repeated_splits.py \
+            --corpus-dir external/NUBes-negation-uncertainty-biomedical-corpus/NUBes/SAMPLE-001 \
+            --output-dir results/nubes_repeated_splits \
+            --seeds 20261028,20261029,20261030,20261031,20261032
+      - name: Upload aggregate metrics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hisab-nubes-scope-metrics-${{ github.run_number }}
+          path: results/
+          if-no-files-found: warn
+          retention-days: 90

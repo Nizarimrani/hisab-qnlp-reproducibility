@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest==8.4.2"]
+benchmark = ["scikit-learn==1.7.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
