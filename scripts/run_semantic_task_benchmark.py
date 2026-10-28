@@ -43,7 +43,7 @@ def symbolic_oracle(row: dict[str, Any]) -> str:
 
 def make_sentence(row: dict[str, Any]) -> str:
     """Produce an illustrative Spanish realization of a structured input."""
-    premise = "el sol sale" if row["premise_truth"] else "el sol no sale"
+    premise = "el sol no sale" if row["negated"] else "el sol sale"
     connector = "Aunque" if row["concession"] else "Si"
     factuality = {
         0: "es poco probable que",
