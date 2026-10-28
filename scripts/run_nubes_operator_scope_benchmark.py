@@ -365,6 +365,68 @@ def hisab_operator_pipeline(tokens: list[dict[str, Any]]) -> list[str]:
     return labels
 
 
+
+
+def scope_from_cue_tags(
+    tokens: list[dict[str, Any]], cue_tags: list[str]
+) -> list[str]:
+    """Generate scope tags from predicted cue tags using punctuation boundaries.
+
+    All incoming tags other than NEG_CUE, UNCERT_CUE, BOTH_CUE are ignored.
+    This makes the hybrid a two-stage system: learned cue detection followed
+    by deterministic scope propagation, with no gold-label access.
+    """
+    if len(tokens) != len(cue_tags):
+        raise ValueError("tokens and cue_tags must have the same length")
+    cue_to_categories = {
+        "NEG_CUE": ("NEG",),
+        "UNCERT_CUE": ("UNCERT",),
+        "BOTH_CUE": ("NEG", "UNCERT"),
+    }
+    punctuation = {".", ";", ":", "!", "?", "…"}
+    lines = [int(token.get("line", 0)) for token in tokens]
+    predicted = [
+        tag if tag in cue_to_categories else "O"
+        for tag in cue_tags
+    ]
+    cue_runs: list[tuple[int, int, tuple[str, ...]]] = []
+    index = 0
+    while index < len(predicted):
+        tag = predicted[index]
+        if tag not in cue_to_categories:
+            index += 1
+            continue
+        end = index + 1
+        while (
+            end < len(predicted)
+            and predicted[end] == tag
+            and lines[end] == lines[index]
+        ):
+            end += 1
+        cue_runs.append((index, end, cue_to_categories[tag]))
+        index = end
+
+    scopes: dict[int, set[str]] = {}
+    for cue_start, cue_end, categories in cue_runs:
+        cursor = cue_end
+        while cursor < len(tokens) and lines[cursor] == lines[cue_start]:
+            if str(tokens[cursor].get("token", "")) in punctuation:
+                break
+            if predicted[cursor] in cue_to_categories:
+                break
+            for position in range(cursor, cursor + 1):
+                scopes.setdefault(position, set()).update(categories)
+            cursor += 1
+
+    for token_index, categories in scopes.items():
+        predicted[token_index] = (
+            "MIXED_SCOPE" if len(categories) > 1
+            else "NEG_SCOPE" if "NEG" in categories
+            else "UNCERT_SCOPE"
+        )
+    return predicted
+
+
 def split_by_document(
     documents: list[dict[str, Any]], test_fraction: float
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -429,6 +491,9 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
     ]
 
     model_metrics: list[dict[str, Any]] = []
+    contextual_flat_predictions: list[str] | None = None
+    contextual_fit_seconds = 0.0
+    contextual_predict_seconds = 0.0
     for name, model in models:
         start = time.perf_counter()
         model.fit(x_train, y_train)
@@ -436,6 +501,10 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
         start = time.perf_counter()
         predicted = list(model.predict(x_test))
         predict_seconds = time.perf_counter() - start
+        if name == "contextual_linear_svc":
+            contextual_flat_predictions = predicted
+            contextual_fit_seconds = fit_seconds
+            contextual_predict_seconds = predict_seconds
         class_report = classification_report(
             y_test, predicted, labels=LABELS, output_dict=True, zero_division=0
         )
@@ -510,6 +579,60 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
                 "recall": float(rule_report[label]["recall"]),
                 "f1-score": float(rule_report[label]["f1-score"]),
                 "support": int(rule_report[label]["support"]),
+            } for label in LABELS
+        },
+        "predictions_saved": False,
+        "uses_gold_annotations_at_inference": False,
+        "uses_quantum_circuit": False,
+    })
+
+    # Hybrid system: retain the trained LinearSVC's cue predictions, discard
+    # its scope labels, then generate scopes using deterministic boundaries.
+    if contextual_flat_predictions is None:
+        raise RuntimeError("Contextual detector predictions were not captured")
+    hybrid_cues_flat = [
+        label if label in CUE_SPAN_LABELS else "O"
+        for label in contextual_flat_predictions
+    ]
+    hybrid_cues_by_doc = _partition_predictions_by_document(test_docs, hybrid_cues_flat)
+    hybrid_scope_start = time.perf_counter()
+    hybrid_predictions_by_doc = {
+        str(doc["doc_id"]): scope_from_cue_tags(
+            doc["tokens"], hybrid_cues_by_doc[str(doc["doc_id"])]
+        )
+        for doc in test_docs
+    }
+    hybrid_scope_seconds = time.perf_counter() - hybrid_scope_start
+    hybrid_predicted = [
+        label for doc in test_docs
+        for label in hybrid_predictions_by_doc[str(doc["doc_id"])]
+    ]
+    hybrid_report = classification_report(
+        y_test, hybrid_predicted, labels=LABELS, output_dict=True, zero_division=0
+    )
+    hybrid_span_metrics = exact_span_metrics(test_docs, hybrid_predictions_by_doc)
+    model_metrics.append({
+        "model": "contextual_cues_plus_rule_scope",
+        "model_type": "hybrid: contextual LinearSVC cue predictions + deterministic scope propagation",
+        "test_tokens": len(y_test),
+        "accuracy": float(accuracy_score(y_test, hybrid_predicted)),
+        "macro_f1_all_labels": float(f1_score(
+            y_test, hybrid_predicted, labels=LABELS, average="macro", zero_division=0
+        )),
+        "macro_f1_operator_labels_present_in_test": float(f1_score(
+            y_test, hybrid_predicted, labels=operator_labels,
+            average="macro", zero_division=0
+        )) if operator_labels else None,
+        "exact_span_metrics": hybrid_span_metrics,
+        "fit_seconds": contextual_fit_seconds,
+        "predict_seconds": contextual_predict_seconds + hybrid_scope_seconds,
+        "additional_scope_seconds": hybrid_scope_seconds,
+        "classification_report": {
+            label: {
+                "precision": float(hybrid_report[label]["precision"]),
+                "recall": float(hybrid_report[label]["recall"]),
+                "f1-score": float(hybrid_report[label]["f1-score"]),
+                "support": int(hybrid_report[label]["support"]),
             } for label in LABELS
         },
         "predictions_saved": False,
