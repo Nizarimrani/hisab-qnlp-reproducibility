@@ -359,9 +359,55 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
             "predictions_saved": False,
         })
 
+    # Rule-based Hisab-inspired pipeline: same held-out tokens, no gold labels
+    # passed into inference, no training fit required.
+    rule_start = time.perf_counter()
+    rule_predicted = [
+        prediction
+        for doc in test_docs
+        for prediction in hisab_operator_pipeline(doc["tokens"])
+    ]
+    rule_predict_seconds = time.perf_counter() - rule_start
+    if len(rule_predicted) != len(y_test):
+        raise RuntimeError(
+            f"Rule pipeline produced {len(rule_predicted)} predictions for {len(y_test)} test tokens"
+        )
+    rule_report = classification_report(
+        y_test, rule_predicted, labels=LABELS, output_dict=True, zero_division=0
+    )
+    operator_labels = [
+        label for label in LABELS if label != "O" and test_counts[label] > 0
+    ]
+    model_metrics.append({
+        "model": "hisab_inspired_lexicon_scope_rules",
+        "model_type": "transparent rule-based operator pipeline; classical execution",
+        "test_tokens": len(y_test),
+        "accuracy": float(accuracy_score(y_test, rule_predicted)),
+        "macro_f1_all_labels": float(f1_score(
+            y_test, rule_predicted, labels=LABELS, average="macro", zero_division=0
+        )),
+        "macro_f1_operator_labels_present_in_test": float(f1_score(
+            y_test, rule_predicted, labels=operator_labels,
+            average="macro", zero_division=0
+        )) if operator_labels else None,
+        "fit_seconds": 0.0,
+        "predict_seconds": rule_predict_seconds,
+        "classification_report": {
+            label: {
+                "precision": float(rule_report[label]["precision"]),
+                "recall": float(rule_report[label]["recall"]),
+                "f1-score": float(rule_report[label]["f1-score"]),
+                "support": int(rule_report[label]["support"]),
+            } for label in LABELS
+        },
+        "predictions_saved": False,
+        "uses_gold_annotations_at_inference": False,
+        "uses_quantum_circuit": False,
+    })
+
     corpus_counts = Counter(token["label"] for doc in documents for token in doc["tokens"])
     report = {
-        "benchmark": "NUBes SAMPLE-001 operator/scope token-label benchmark",
+        "benchmark": "NUBes SAMPLE-001 operator/scope benchmark: symbolic rules vs contextual LinearSVC",
         "task": "identify negation/uncertainty cues and annotation-defined scope tokens",
         "corpus": {
             "name": "NUBes",
@@ -398,6 +444,7 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
         "interpretation": {
             "does_not_test_quantum_advantage": True,
             "does_not_execute_hisab_quantum_circuit": True,
+            "includes_hisab_inspired_rule_pipeline": True,
             "scope_definition": (
                 "Scope or DiscScope target span from a Neg* cue is NEG_SCOPE; from an Uncert* "
                 "cue is UNCERT_SCOPE. Cue tokens are labeled separately."
@@ -407,7 +454,7 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
                 "NUBes is biomedical Spanish; transfer to general Spanish must be tested separately.",
                 "This is not a full competitive NLP benchmark.",
                 "The CC BY-SA 3.0 Spain source license must be respected; source text is not copied to this repository or artifacts.",
-                "No claim about Hisab is warranted until a specified Hisab input mapping is evaluated on the same held-out examples.",
+                "The rule-based pipeline is an initial classical Hisab-inspired operator mapping; it is not the fixed Qiskit circuit and does not yet validate the full Hisab architecture.",
             ],
         },
     }
