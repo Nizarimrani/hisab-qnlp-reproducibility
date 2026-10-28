@@ -51,8 +51,10 @@ This circuit is deterministic, uses computational-basis states and X gates only,
 
 The NUBes benchmark reports:
 
-- token-label metrics for majority dummy, contextual LinearSVC, and the rule-based extractor;
+- token-label and contiguous exact-span metrics for four systems, plus exact-match scores against original BRAT scope targets;
 - number and type of typed operators generated from held-out text using predictions only;
+- five-seed, document-grouped holdout means and sample standard deviations;
+- original BRAT target exact-match metrics with discontinuous segments retained;
 - number of target tokens tested through the variable-length circuit;
 - symbolic/circuit agreement, circuit width and gate-count summaries;
 - aggregate runtime for schema conversion and statevector evaluation.
@@ -64,7 +66,9 @@ The declared base truth used for this consistency check is true for each target 
 - [x] Add tests for multi-negation, overlapping negation + uncertainty, and punctuation/line scope boundaries.
 - [x] Report strict exact-boundary cue/scope span metrics alongside token-label metrics.
 - [x] Add a hybrid baseline that uses contextual cue predictions but replaces learned scope labels with deterministic scope propagation.
-- [ ] Evaluate BRAT discontinuous scopes as linked multi-part spans; current exact-span metrics score maximal contiguous token-tag spans and cannot yet represent a discontinuous relation as one object.
+- [x] Parse linked BRAT target entities with all offset segments retained and report exact-match metrics against original entities.
+- [x] Add an end-to-end test showing two predicted contiguous runs do not exactly match one discontinuous BRAT target.
+- [ ] Add a relation-aware prediction representation that can emit linked multi-part scope targets; current systems predict contiguous token-tag runs only.
 - Define event-level proposition values before interpreting truth-state outputs on real text.
 - Compare the circuit and symbolic implementation on identical inputs with end-to-end resource accounting.
 - Keep quantum-advantage claims blocked until a real, competitive quantum/classical task comparison exists.
