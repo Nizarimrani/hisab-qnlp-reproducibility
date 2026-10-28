@@ -14,10 +14,12 @@ from qiskit_aer import AerSimulator
 THETA = math.pi / 4
 TOPOLOGIES = ("local", "nearest", "all_to_all")
 FIELDS = ["status","n_qubits","topology","logical_layers","seed",
-"logical_ry_count","logical_rz_count","logical_cry_count","compiled_depth",
-"compiled_gate_count","compiled_cx_count","statevector_memory_mb_minimum",
-"elapsed_seconds","state_norm_error","central_cut_entropy_bits",
-"central_cut_max_entropy_bits","central_cut_normalized_entropy",
+"logical_ry_count","logical_rz_count","logical_cry_count",
+"aer_transpile_seconds","aer_compiled_depth","aer_compiled_gate_count","aer_compiled_cry_count",
+"basis_transpile_seconds","basis_depth_rz_sx_x_cx","basis_gate_count_rz_sx_x_cx",
+"basis_cx_count","basis_sx_count","basis_rz_count","basis_x_count",
+"statevector_memory_mb_minimum","elapsed_seconds","state_norm_error",
+"central_cut_entropy_bits","central_cut_max_entropy_bits","central_cut_normalized_entropy",
 "central_cut_schmidt_rank_numeric","phase_ablation_tvd_z_readout",
 "phase_ablation_tvd_hadamard_readout_q0","phase_ablation_fidelity","error"]
 
@@ -61,16 +63,50 @@ def build_circuit(n, layers, topology, seed, omit_final_rz_q0=False, hadamard_re
     return qc
 
 def simulate(qc, backend, seed):
-    compiled = transpile(qc,backend,optimization_level=0,seed_transpiler=seed)
-    start=time.perf_counter()
-    result=backend.run(compiled,shots=1,seed_simulator=seed).result()
-    elapsed=time.perf_counter()-start
-    if not result.success: raise RuntimeError(result.status)
-    state=np.asarray(result.data(0)["psi"],dtype=np.complex128)
-    ops=compiled.count_ops()
-    return state, {"elapsed_seconds":elapsed,"compiled_depth":int(compiled.depth()),
-      "compiled_gate_count":int(sum(v for k,v in ops.items() if not str(k).startswith("save_"))),
-      "compiled_cx_count":int(ops.get("cx",0))}
+    start_transpile = time.perf_counter()
+    compiled = transpile(qc, backend, optimization_level=0, seed_transpiler=seed)
+    aer_transpile_seconds = time.perf_counter() - start_transpile
+
+    start = time.perf_counter()
+    result = backend.run(compiled, shots=1, seed_simulator=seed).result()
+    elapsed = time.perf_counter() - start
+    if not result.success:
+        raise RuntimeError(result.status)
+    state = np.asarray(result.data(0)["psi"], dtype=np.complex128)
+    aer_ops = compiled.count_ops()
+
+    # Aer keeps controlled-RY as a native simulator operation. To report a useful
+    # hardware-like resource estimate, also transpile the unitary part into a
+    # common {rz, sx, x, cx} basis. Omit save_statevector, which is simulator-only.
+    unitary = QuantumCircuit(qc.num_qubits)
+    for item in qc.data:
+        if item.operation.name.startswith("save_"):
+            continue
+        qindices = [qc.find_bit(q).index for q in item.qubits]
+        unitary.append(item.operation, [unitary.qubits[i] for i in qindices])
+    start_basis = time.perf_counter()
+    basis = transpile(
+        unitary, basis_gates=["rz", "sx", "x", "cx"],
+        optimization_level=0, seed_transpiler=seed
+    )
+    basis_transpile_seconds = time.perf_counter() - start_basis
+    basis_ops = basis.count_ops()
+
+    return state, {
+      "elapsed_seconds": elapsed,
+      "aer_transpile_seconds": aer_transpile_seconds,
+      "aer_compiled_depth": int(compiled.depth()),
+      "aer_compiled_gate_count": int(sum(v for k, v in aer_ops.items()
+                                          if not str(k).startswith("save_"))),
+      "aer_compiled_cry_count": int(aer_ops.get("cry", 0)),
+      "basis_transpile_seconds": basis_transpile_seconds,
+      "basis_depth_rz_sx_x_cx": int(basis.depth()),
+      "basis_gate_count_rz_sx_x_cx": int(sum(basis_ops.values())),
+      "basis_cx_count": int(basis_ops.get("cx", 0)),
+      "basis_sx_count": int(basis_ops.get("sx", 0)),
+      "basis_rz_count": int(basis_ops.get("rz", 0)),
+      "basis_x_count": int(basis_ops.get("x", 0)),
+    }
 
 def entropy_central_cut(state,n):
     cut=n//2
@@ -147,7 +183,9 @@ def main():
     elapsed=time.perf_counter()-started; groups={}
     for row in valid: groups.setdefault((row["n_qubits"],row["topology"],row["logical_layers"]),[]).append(row)
     aggregates=[]
-    keys=("elapsed_seconds","compiled_depth","compiled_gate_count","compiled_cx_count",
+    keys=("elapsed_seconds","aer_transpile_seconds","aer_compiled_depth","aer_compiled_gate_count",
+      "aer_compiled_cry_count","basis_transpile_seconds","basis_depth_rz_sx_x_cx",
+      "basis_gate_count_rz_sx_x_cx","basis_cx_count","basis_sx_count","basis_rz_count","basis_x_count",
       "central_cut_entropy_bits","central_cut_normalized_entropy","central_cut_schmidt_rank_numeric","state_norm_error")
     for (n,topology,layers),group in sorted(groups.items()):
         rec={"n_qubits":n,"topology":topology,"logical_layers":layers,"n_replicates":len(group)}
@@ -180,10 +218,10 @@ def main():
       "- Backend: exact CPU statevector simulation, double precision",
       "- Entropy SVD computed only through 20 qubits to bound diagnostic overhead",
       "- Synthetic operator circuits only; no hardware or linguistic validation.","",
-      "## Slowest successful cases","","| Qubits | Topology | Layers | Runtime (s) | Compiled depth | CX count |",
-      "|---:|---|---:|---:|---:|---:|"]
+      "## Slowest successful cases","","| Qubits | Topology | Layers | Aer runtime (s) | Aer depth | Basis depth | Basis CX count |",
+      "|---:|---|---:|---:|---:|---:|---:|"]
     for r in sorted(valid,key=lambda x:float(x["elapsed_seconds"]),reverse=True)[:10]:
-        report.append(f"| {r['n_qubits']} | {r['topology']} | {r['logical_layers']} | {float(r['elapsed_seconds']):.3f} | {r['compiled_depth']} | {r['compiled_cx_count']} |")
+        report.append(f"| {r['n_qubits']} | {r['topology']} | {r['logical_layers']} | {float(r['elapsed_seconds']):.3f} | {r['aer_compiled_depth']} | {r['basis_depth_rz_sx_x_cx']} | {r['basis_cx_count']} |")
     if failed: report += ["","## Failed cases",""]+[f"- {r['n_qubits']} qubits, {r['topology']}, {r['logical_layers']} layers: {r['error']}" for r in failed]
     report += ["","## Interpretation","",
       "Statevector runtime measures this simulator and circuit family, not quantum advantage. "
