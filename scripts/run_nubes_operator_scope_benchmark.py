@@ -946,17 +946,18 @@ def run_benchmark(
         "",
         "## Results",
         "",
-        "| Model | Accuracy | Macro-F1 (all labels) | Macro-F1 (operator labels present in test) | Cue exact-span F1 | Scope exact-span F1 | Fit (s) | Predict (s) |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Model | Accuracy | Macro-F1 (all labels) | Macro-F1 (operator labels present in test) | Cue exact-span F1 | Scope exact-span F1 | BRAT-linked target F1 | Fit (s) | Predict (s) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for item in model_metrics:
         score = item["macro_f1_operator_labels_present_in_test"]
         score_text = f"{score:.4f}" if score is not None else "n/a"
         cue_span_f1 = item["exact_span_metrics"]["cue_spans"]["f1"]
         scope_span_f1 = item["exact_span_metrics"]["scope_spans"]["f1"]
+        brat_target_f1 = item["brat_linked_scope_metrics"]["overall"]["f1"]
         lines.append(
             f"| {item['model']} | {item['accuracy']:.4f} | {item['macro_f1_all_labels']:.4f} "
-            f"| {score_text} | {cue_span_f1:.4f} | {scope_span_f1:.4f} "
+            f"| {score_text} | {cue_span_f1:.4f} | {scope_span_f1:.4f} | {brat_target_f1:.4f} "
             f"| {item['fit_seconds']:.3f} | {item['predict_seconds']:.3f} |"
         )
     lines.extend([
@@ -973,6 +974,23 @@ def run_benchmark(
         lines.append(
             f"| {item['model']} | {span_metrics['cue_spans']['f1']:.4f} "
             f"| {span_metrics['scope_spans']['f1']:.4f} |"
+        )
+    lines.extend([
+        "",
+        "## Exact evaluation against original BRAT scope targets",
+        "",
+        "The linked-target metric compares predicted token-tag runs against the original BRAT target entities after offset-to-token conversion. Gold target entities keep all offset segments together, including discontinuous spans. Current systems predict contiguous runs only, so a multi-segment target receives no exact match unless a relation-aware prediction layer is added.",
+        "",
+        "| Model | Gold linked targets | Predicted targets | Exact matches | Gold discontinuous targets | Discontinuous exact matches | Linked-target F1 |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ])
+    for item in model_metrics:
+        linked = item["brat_linked_scope_metrics"]
+        overall = linked["overall"]
+        lines.append(
+            f"| {item['model']} | {overall['gold_targets']} | {overall['predicted_targets']} "
+            f"| {overall['exact_matches']} | {linked['gold_discontinuous_targets']} "
+            f"| {linked['gold_discontinuous_targets_exactly_matched']} | {overall['f1']:.4f} |"
         )
     lines.extend([
         "",
