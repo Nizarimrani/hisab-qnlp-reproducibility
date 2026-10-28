@@ -69,7 +69,22 @@ If that compiler can efficiently express a universal gate set (for example H, T 
 
 This is a conditional route to a hard subfamily—not proof of a useful semantic advantage. An arbitrary universal circuit can be encoded as an artificial operator sequence; that alone does not show that ordinary sentences induce hard instances or that the circuit outperforms NLP baselines.
 
-## 4. Why Qiskit simulation still helps
+## 4. A second, more language-adjacent route: quantum oracle sketching
+
+A recent preprint by Zhao et al., arXiv:2604.07639 (v2 submitted 1 October 2026), claims an exponential separation in model size for specific large-classical-data classification and dimension-reduction settings. Its real-data experiments include IMDb movie-review sentiment. The proposed mechanism, quantum oracle sketching (QOS), constructs an approximate phase oracle from random classical samples and combines it with quantum query algorithms and classical-shadow readout.
+
+This is worth evaluating because sentiment is a natural-language task. It is not, however, the same as Hisab's current operator circuit. The proof and algorithm depend on a specific access model: the target is represented as a function/oracle over a large domain, classical samples are streamed to approximate that oracle, and a specified quantum query algorithm operates on it. Ordinary text inputs do not automatically satisfy those assumptions, and fewer qubits alone do not mean less total computation or data access.
+
+There is also a version-control caution. A public mathematical audit by Vellón Gascón (July 2026) reports counterexamples and proof/interface gaps in the source paper's v1, including a finite counterexample to one printed QOS error threshold. That audit explicitly scopes its findings to arXiv:2604.07639v1; the preprint's current v2 was submitted later and should be audited separately before its theorem is relied upon. The correct conclusion is neither to discard all QOS results nor to take the abstract claim as independently verified for Hisab.
+
+**Recommended parallel experiment:** freeze the current v2 and code commit of the QOS authors' public repository; reproduce their IMDb sentiment benchmark under its documented access model; audit the theorem assumptions relevant to that exact code path; then test whether Hisab's structured linguistic operators can be used as a feature/oracle representation without losing the theorem's input-access and sample-complexity guarantees.
+
+References:
+- Zhao et al. (2026), “Exponential quantum advantage in processing massive classical data,” arXiv:2604.07639, version history and abstract: https://arxiv.org/abs/2604.07639
+- Authors' QOS code and IMDb experiment instructions: https://github.com/haimengzhao/quantum-oracle-sketching
+- Vellón Gascón (2026), version-specific audit of source v1, DOI: https://doi.org/10.5281/zenodo.21704142 ; audit repository states that it examines v1, not the later source v2: https://github.com/gatephys/quantum-oracle-sketching
+
+## 5. Why Qiskit simulation still helps
 
 Qiskit Aer is useful for a projection even though it is itself classical:
 
@@ -80,7 +95,7 @@ Qiskit Aer is useful for a projection even though it is itself classical:
 
 The projection file is intentionally explicit about which sizes were measured and which are extrapolated. A curve fit over 20–26 qubits must not be called a measured result at 32 or 40 qubits.
 
-## 5. Criteria for an advantage claim
+## 6. Criteria for an advantage claim
 
 A serious claim about Hisab itself needs all of the following:
 
@@ -95,7 +110,7 @@ Until then, the strongest responsible conclusion is: **Hisab's current dense cir
 
 ## References
 
-1. Y. Liu et al. (2023), “The hardness of random quantum circuits,” *Nature Physics*. https://www.nature.com/articles/s41567-023-02131-2
+1. Ramis Movassagh (2023), “The hardness of random quantum circuits,” *Nature Physics*. https://www.nature.com/articles/s41567-023-02131-2
 2. A. Bouland, W. Fefferman, C. Nirkhe and U. Vazirani (2019), “On the complexity and verification of quantum random circuit sampling,” *Nature Physics*. https://www.nature.com/articles/s41567-018-0318-2
 3. A. Bouland, B. Fefferman, C. Nirkhe and U. Vazirani (2018/2019), “The Complexity and Verification of Quantum Random Circuit Sampling,” NIST record and citation. https://www.nist.gov/publications/complexity-and-verification-quantum-random-circuit-sampling
 4. “Boundaries of quantum supremacy via random circuit sampling,” *npj Quantum Information* (2023), discusses the finite width/depth region in which classical simulation is challenged. https://www.nature.com/articles/s41534-023-00703-x
