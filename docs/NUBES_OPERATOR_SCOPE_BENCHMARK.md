@@ -41,7 +41,7 @@ The upstream repository states that NUBes, IULA+, their experiment splits, and a
 
 - NUBes is biomedical Spanish, not balanced general-domain Spanish.
 - This measures token-level cue/scope detection, not event-level inference, concession semantics, or Hisab's entire architecture.
-- The rule-based pipeline is deliberately a rough first operator mapping; punctuation-bounded scope propagation will not reproduce every long-distance or discontinuous BRAT relation.
+- Both the rule-based pipeline and the hybrid system use punctuation-bounded scope heuristics; they do not reproduce every long-distance or discontinuous BRAT relation.
 - The variable-length circuit uses deterministic X gates and a classical statevector simulator. Its agreement with the symbolic reference is a code-consistency check, not a task-level accuracy measure or a quantum advantage result.
 - The existing fixed nine-qubit circuit is not applied to arbitrary documents by this pipeline.
 - No quantum advantage, quantum speedup, or end-to-end Hisab win is demonstrated.
