@@ -58,8 +58,9 @@ def operators_from_token_tags(
     Only lexical tokens and *predicted* tags are consumed. This conversion does
     not read token['label'] or any other reference annotation. Scope is limited
     to target tokens tagged with the matching scope label after a cue, stopping
-    at punctuation, line boundaries, or the next cue. This mirrors the current
-    baseline and intentionally does not infer discontinuous relations.
+    at punctuation and line boundaries. A token tagged MIXED_SCOPE is attached
+    to both operator families, including when another cue intervenes. This
+    supports explicitly annotated overlap but cannot infer missing scope structure.
     """
     if len(tokens) != len(labels):
         raise ValueError("tokens and labels must have the same length")
@@ -108,6 +109,7 @@ def operators_from_token_tags(
         cue_line = int(tokens[cue_end].get("line", 0))
         scope_indices: list[int] = []
         cursor = cue_end + 1
+        crossed_another_cue = False
         while cursor < len(tokens):
             if int(tokens[cursor].get("line", 0)) != cue_line:
                 break
@@ -115,8 +117,12 @@ def operators_from_token_tags(
             if token_text in punctuation:
                 break
             if labels[cursor] in {"NEG_CUE", "UNCERT_CUE", "BOTH_CUE"}:
-                break
-            if labels[cursor] == scope_label[kind]:
+                crossed_another_cue = True
+                cursor += 1
+                continue
+            if labels[cursor] == "MIXED_SCOPE":
+                scope_indices.append(cursor)
+            elif not crossed_another_cue and labels[cursor] == scope_label[kind]:
                 scope_indices.append(cursor)
             cursor += 1
 
