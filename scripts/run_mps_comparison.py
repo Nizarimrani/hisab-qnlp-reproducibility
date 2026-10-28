@@ -38,7 +38,7 @@ FIELDS = [
     "mean_abs_observable_error", "max_abs_observable_error",
     "error",
 ]
-BASIS = ["ry", "rz", "cry", "h"]
+BASIS = ["ry", "rz", "cx", "h"]
 
 
 def gate_only_circuit(n: int, layers: int, topology: str, seed: int) -> QuantumCircuit:
