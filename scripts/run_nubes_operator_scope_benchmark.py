@@ -148,6 +148,119 @@ def token_features(tokens: list[dict[str, Any]], index: int) -> dict[str, Any]:
     return features
 
 
+def hisab_operator_pipeline(tokens: list[dict[str, Any]]) -> list[str]:
+    """Transparent rule-based operator extractor plus scope propagation.
+
+    Inference uses only token strings and sentence boundaries. Gold annotation
+    labels are deliberately ignored. This is a classical Hisab-inspired
+    operator baseline, not the fixed nine-qubit Qiskit circuit.
+    """
+    uncertainty_patterns = [
+        ("no", "se", "puede", "descartar"),
+        ("no", "sabe", "precisar"),
+        ("no", "se", "descarta"),
+        ("al", "parecer"),
+        ("sin", "claro"),
+        ("no", "claro"),
+        ("podría",),
+        ("podria",),
+        ("podrían",),
+        ("podrian",),
+        ("probable",),
+        ("probablemente",),
+        ("posible",),
+        ("posiblemente",),
+        ("quizás",),
+        ("quizas",),
+        ("aparentemente",),
+        ("aparente",),
+        ("presunto",),
+        ("presunta",),
+        ("sospecha",),
+        ("parece",),
+    ]
+    negation_patterns = [
+        ("ausencia", "de"),
+        ("ninguno",),
+        ("ninguna",),
+        ("ningún",),
+        ("ningun",),
+        ("ningunas",),
+        ("ningunos",),
+        ("nunca",),
+        ("jamás",),
+        ("jamas",),
+        ("asintomático",),
+        ("asintomatico",),
+        ("asintomática",),
+        ("asintomatica",),
+        ("tampoco",),
+        ("sin",),
+        ("no",),
+        ("ni",),
+    ]
+    patterns = sorted(
+        [(p, "UNCERT") for p in uncertainty_patterns]
+        + [(p, "NEG") for p in negation_patterns],
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+    words = [str(token["token"]).casefold() for token in tokens]
+    lines = [int(token["line"]) for token in tokens]
+    cue_categories: dict[int, set[str]] = {}
+    cue_starts: list[tuple[int, int, str]] = []
+
+    # Longest patterns first preserve multi-token cues such as "no sabe precisar"
+    # rather than independently labeling each embedded "no" as negation.
+    for pattern, category in patterns:
+        width = len(pattern)
+        for start in range(0, len(tokens) - width + 1):
+            positions = range(start, start + width)
+            if any(lines[i] != lines[start] for i in positions):
+                continue
+            if tuple(words[start:start + width]) != pattern:
+                continue
+            if any(i in cue_categories for i in positions):
+                continue
+            cue_starts.append((start, start + width, category))
+            for i in positions:
+                cue_categories.setdefault(i, set()).add(category)
+
+    labels = ["O"] * len(tokens)
+    for index, categories in cue_categories.items():
+        labels[index] = "BOTH_CUE" if len(categories) > 1 else (
+            "NEG_CUE" if "NEG" in categories else "UNCERT_CUE"
+        )
+
+    # Scope heuristic: from immediately after each cue until punctuation,
+    # sentence end, or the next cue. This deliberately simple scope rule is
+    # auditable and will not reproduce discontinuous BRAT relations.
+    cue_starts.sort()
+    punctuation = {".", ";", ":", "!", "?", "…"}
+    scopes: list[tuple[int, int, str]] = []
+    for cue_start, cue_end, category in cue_starts:
+        cursor = cue_end
+        while cursor < len(tokens) and lines[cursor] == lines[cue_start]:
+            if str(tokens[cursor]["token"]) in punctuation:
+                break
+            if cursor in cue_categories:
+                break
+            cursor += 1
+        if cursor > cue_end:
+            scopes.append((cue_end, cursor, category))
+
+    scope_categories: dict[int, set[str]] = {}
+    for start, end, category in scopes:
+        for index in range(start, end):
+            if not cue_categories.get(index):
+                scope_categories.setdefault(index, set()).add(category)
+    for index, categories in scope_categories.items():
+        labels[index] = "MIXED_SCOPE" if len(categories) > 1 else (
+            "NEG_SCOPE" if "NEG" in categories else "UNCERT_SCOPE"
+        )
+    return labels
+
+
 def split_by_document(
     documents: list[dict[str, Any]], test_fraction: float
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
