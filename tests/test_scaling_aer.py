@@ -1,5 +1,11 @@
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
+
+# Make the repository root importable when pytest's import mode only adds tests/.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from qiskit_aer import AerSimulator
 
 from scripts.run_scaling_aer import build_circuit, entropy_central_cut, simulate, tvd
