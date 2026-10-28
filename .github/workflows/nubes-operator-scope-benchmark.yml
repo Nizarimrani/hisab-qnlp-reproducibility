@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "scripts/run_nubes_operator_scope_benchmark.py"
+      - "scripts/run_nubes_repeated_splits.py"
       - "tests/test_nubes_operator_scope_benchmark.py"
       - "docs/NUBES_OPERATOR_SCOPE_BENCHMARK.md"
       - ".github/workflows/nubes-operator-scope-benchmark.yml"
@@ -47,11 +48,17 @@ jobs:
           python scripts/run_nubes_operator_scope_benchmark.py \
             --corpus-dir external/NUBes-negation-uncertainty-biomedical-corpus/NUBes/SAMPLE-001 \
             --output-dir results/nubes_operator_scope
+      - name: Run repeated document-grouped splits
+        run: |
+          python scripts/run_nubes_repeated_splits.py \
+            --corpus-dir external/NUBes-negation-uncertainty-biomedical-corpus/NUBes/SAMPLE-001 \
+            --output-dir results/nubes_repeated_splits \
+            --seeds 20261028,20261029,20261030,20261031,20261032
       - name: Upload aggregate metrics only
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hisab-nubes-scope-metrics-${{ github.run_number }}
-          path: results/nubes_operator_scope/
+          path: results/
           if-no-files-found: warn
           retention-days: 90
