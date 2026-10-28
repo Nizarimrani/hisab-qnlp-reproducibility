@@ -13,7 +13,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-from run_nubes_operator_scope_benchmark import SEED, run_benchmark
+try:
+    from scripts.run_nubes_operator_scope_benchmark import SEED, run_benchmark
+except ModuleNotFoundError:
+    from run_nubes_operator_scope_benchmark import SEED, run_benchmark
 
 
 METRIC_PATHS = {
@@ -113,7 +116,7 @@ def run_repeated_benchmark(
         "number_of_splits": len(seeds),
         "test_fraction_target": test_fraction,
         "split_unit": "whole annotated documents; no document crosses train/test within a split",
-        "corpus": run_records[0]["models"] and {
+        "corpus": {
             "name": "NUBes",
             "subcorpus": "SAMPLE-001",
             "upstream_repository": "https://github.com/Vicomtech/NUBes-negation-uncertainty-biomedical-corpus",
