@@ -875,6 +875,12 @@ def run_benchmark(
     }
 
     corpus_counts = Counter(token["label"] for doc in documents for token in doc["tokens"])
+    discontinuous_brat_targets = len({
+        (str(doc["doc_id"]), str(target["target_id"]))
+        for doc in documents
+        for target in doc.get("brat_scope_targets", [])
+        if len(target["target_segments"]) > 1
+    })
     report = {
         "benchmark": "NUBes SAMPLE-001 operator/scope benchmark: symbolic rules vs contextual LinearSVC",
         "task": "identify negation/uncertainty cues and annotation-defined scope tokens",
@@ -896,6 +902,7 @@ def run_benchmark(
         },
         "data": {
             "annotated_documents": len(documents),
+            "discontinuous_brat_scope_target_entities": discontinuous_brat_targets,
             "train_documents": len(train_docs),
             "test_documents": len(test_docs),
             "train_tokens": len(y_train),
@@ -940,6 +947,7 @@ def run_benchmark(
         "Not a quantum-advantage experiment. No source sentences or token predictions are included in the report artifact.",
         "",
         f"- Annotated documents: {len(documents)}",
+        f"- Linked BRAT target entities with discontinuous offsets in SAMPLE-001: {discontinuous_brat_targets}",
         f"- Held-out train/test documents: {len(train_docs)} / {len(test_docs)}",
         f"- Train/test tokens: {len(y_train)} / {len(y_test)}",
         f"- Test label distribution: {json.dumps({label: test_counts[label] for label in LABELS}, ensure_ascii=False)}",
