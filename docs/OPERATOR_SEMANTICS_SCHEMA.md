@@ -63,6 +63,7 @@ The declared base truth used for this consistency check is true for each target 
 
 - [x] Add tests for multi-negation, overlapping negation + uncertainty, and punctuation/line scope boundaries.
 - [x] Report strict exact-boundary cue/scope span metrics alongside token-label metrics.
+- [x] Add a hybrid baseline that uses contextual cue predictions but replaces learned scope labels with deterministic scope propagation.
 - [ ] Evaluate BRAT discontinuous scopes as linked multi-part spans; current exact-span metrics score maximal contiguous token-tag spans and cannot yet represent a discontinuous relation as one object.
 - Define event-level proposition values before interpreting truth-state outputs on real text.
 - Compare the circuit and symbolic implementation on identical inputs with end-to-end resource accounting.
