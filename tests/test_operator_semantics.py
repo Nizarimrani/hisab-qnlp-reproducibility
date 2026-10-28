@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.run_nubes_operator_scope_benchmark import exact_span_metrics  # noqa: E402
+
 from hisab_qnlp.operator_semantics import (  # noqa: E402
     OperatorType,
     SemanticOperator,
@@ -109,3 +111,78 @@ def test_token_tags_convert_to_typed_operators_without_reading_gold_labels():
     assert first[0].scope_token_indices == (1, 2)
     assert first[1].kind == OperatorType.UNCERTAINTY
     assert first[1].scope_token_indices == (5,)
+
+def test_mixed_scope_can_link_uncertainty_under_negation():
+    tokens = [
+        {"token": "No", "line": 0, "label": "NEG_CUE"},
+        {"token": "quizá", "line": 0, "label": "UNCERT_CUE"},
+        {"token": "fiebre", "line": 0, "label": "MIXED_SCOPE"},
+        {"token": ".", "line": 0, "label": "O"},
+    ]
+    tags = ["NEG_CUE", "UNCERT_CUE", "MIXED_SCOPE", "O"]
+    operators = operators_from_token_tags(tokens, tags, source="predicted")
+    assert len(operators) == 2
+    assert operators[0].kind == OperatorType.NEGATION
+    assert operators[1].kind == OperatorType.UNCERTAINTY
+    assert operators[0].scope_token_indices == (2,)
+    assert operators[1].scope_token_indices == (2,)
+
+    result = validate_composition(True, operators, target_token_index=2)
+    assert result["agreement"]
+    assert result["symbolic"]["truth"] is False
+    assert result["symbolic"]["uncertain"] is True
+
+
+def test_operator_scope_does_not_cross_punctuation_or_line_boundary():
+    tokens = [
+        {"token": "No", "line": 0, "label": "O"},
+        {"token": "fiebre", "line": 0, "label": "O"},
+        {"token": ".", "line": 0, "label": "O"},
+        {"token": "quizá", "line": 1, "label": "O"},
+        {"token": "mejore", "line": 1, "label": "O"},
+    ]
+    tags = ["NEG_CUE", "NEG_SCOPE", "O", "UNCERT_CUE", "UNCERT_SCOPE"]
+    operators = operators_from_token_tags(tokens, tags, source="predicted")
+    assert operators[0].scope_token_indices == (1,)
+    assert operators[1].scope_token_indices == (4,)
+
+
+def test_exact_span_metrics_penalize_scope_boundary_error():
+    document = {
+        "doc_id": "tiny",
+        "tokens": [
+            {"token": "No", "line": 0, "label": "NEG_CUE"},
+            {"token": "presenta", "line": 0, "label": "NEG_SCOPE"},
+            {"token": "fiebre", "line": 0, "label": "NEG_SCOPE"},
+            {"token": ".", "line": 0, "label": "O"},
+        ],
+    }
+    metrics = exact_span_metrics(
+        [document],
+        {"tiny": ["NEG_CUE", "NEG_SCOPE", "O", "O"]},
+    )
+    assert metrics["cue_spans"]["exact_matches"] == 1
+    assert metrics["cue_spans"]["f1"] == 1.0
+    assert metrics["scope_spans"]["gold_spans"] == 1
+    assert metrics["scope_spans"]["predicted_spans"] == 1
+    assert metrics["scope_spans"]["exact_matches"] == 0
+    assert metrics["scope_spans"]["f1"] == 0.0
+
+
+def test_exact_span_metrics_reward_exact_boundaries():
+    document = {
+        "doc_id": "tiny",
+        "tokens": [
+            {"token": "No", "line": 0, "label": "NEG_CUE"},
+            {"token": "presenta", "line": 0, "label": "NEG_SCOPE"},
+            {"token": "fiebre", "line": 0, "label": "NEG_SCOPE"},
+            {"token": ".", "line": 0, "label": "O"},
+        ],
+    }
+    metrics = exact_span_metrics(
+        [document],
+        {"tiny": ["NEG_CUE", "NEG_SCOPE", "NEG_SCOPE", "O"]},
+    )
+    assert metrics["scope_spans"]["exact_matches"] == 1
+    assert metrics["scope_spans"]["f1"] == 1.0
+
