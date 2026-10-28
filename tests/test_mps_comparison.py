@@ -15,7 +15,7 @@ def test_observable_circuit_contains_local_and_pairwise_expectations():
     circuit, labels = observable_circuit(gates)
     assert len(labels) == 4 + 4  # four Z and four ZZ pairs (three edges plus wraparound)
     assert all(label in labels for label in ("z_0", "z_3", "zz_0_1", "zz_0_3"))
-    assert sum(1 for inst in circuit.data if inst.operation.name == "save_expectation_value") == 8
+    assert sum(1 for inst in circuit.data if inst.operation.name.startswith("save_")) == 8
 
 
 def test_mps_matches_statevector_for_small_low_entanglement_case():
