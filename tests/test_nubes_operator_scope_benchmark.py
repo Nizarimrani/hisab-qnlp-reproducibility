@@ -7,9 +7,11 @@ if str(ROOT) not in sys.path:
 
 from scripts.run_nubes_repeated_splits import run_repeated_benchmark  # noqa: E402
 from scripts.run_nubes_operator_scope_benchmark import (  # noqa: E402
+    brat_linked_scope_metrics,
     hisab_operator_pipeline,
     load_document,
     parse_brat,
+    parse_brat_detailed,
     split_by_document,
     scope_from_cue_tags,
     token_features,
@@ -191,4 +193,34 @@ def test_repeated_split_runner_rejects_duplicate_seeds(tmp_path):
             output_dir=tmp_path / "repeated",
             seeds=[7, 7],
         )
+
+def test_brat_parser_preserves_linked_discontinuous_scope_segments(tmp_path):
+    text_path = tmp_path / "discontinuous.txt"
+    ann_path = tmp_path / "discontinuous.ann"
+    text_path.write_text("No fiebre de alta.\n", encoding="utf-8")
+    ann_path.write_text(
+        "T1\tNegSynMarker 0 2\tNo\n"
+        "T2\tPhrase 3 9;13 17\tfiebre alta\n"
+        "R1\tScope Arg1:T1 Arg2:T2\n",
+        encoding="utf-8",
+    )
+
+    cues, linked_targets = parse_brat_detailed(ann_path)
+    assert len(cues) == 1
+    assert cues[0]["segments"] == [(0, 2)]
+    assert len(linked_targets) == 1
+    assert linked_targets[0]["target_segments"] == [(3, 9), (13, 17)]
+
+    document = load_document(text_path)
+    labels = [token["label"] for token in document["tokens"]]
+    assert labels == ["NEG_CUE", "NEG_SCOPE", "O", "NEG_SCOPE", "O"]
+
+    # The two predicted contiguous runs must not count as an exact match for
+    # the one original BRAT target entity containing two linked segments.
+    score = brat_linked_scope_metrics([document], {document["doc_id"]: labels})
+    assert score["gold_discontinuous_targets"] == 1
+    assert score["overall"]["gold_targets"] == 1
+    assert score["overall"]["predicted_targets"] == 2
+    assert score["overall"]["exact_matches"] == 0
+    assert score["overall"]["f1"] == 0.0
 
