@@ -666,15 +666,33 @@ def run_benchmark(corpus_dir: Path, output_dir: Path, test_fraction: float = 0.2
         "",
         "## Results",
         "",
-        "| Model | Accuracy | Macro-F1 (all labels) | Macro-F1 (operator labels present in test) | Fit (s) | Predict (s) |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Model | Accuracy | Macro-F1 (all labels) | Macro-F1 (operator labels present in test) | Cue exact-span F1 | Scope exact-span F1 | Fit (s) | Predict (s) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for item in model_metrics:
         score = item["macro_f1_operator_labels_present_in_test"]
         score_text = f"{score:.4f}" if score is not None else "n/a"
+        cue_span_f1 = item["exact_span_metrics"]["cue_spans"]["f1"]
+        scope_span_f1 = item["exact_span_metrics"]["scope_spans"]["f1"]
         lines.append(
             f"| {item['model']} | {item['accuracy']:.4f} | {item['macro_f1_all_labels']:.4f} "
-            f"| {score_text} | {item['fit_seconds']:.3f} | {item['predict_seconds']:.3f} |"
+            f"| {score_text} | {cue_span_f1:.4f} | {scope_span_f1:.4f} "
+            f"| {item['fit_seconds']:.3f} | {item['predict_seconds']:.3f} |"
+        )
+    lines.extend([
+        "",
+        "## Exact-boundary span evaluation",
+        "",
+        "Span precision/recall/F1 require exact start and end token boundaries; a scope that is one token too short does not count as an exact match. These are contiguous token-tag spans, so they do not yet score BRAT discontinuous relations as unified multi-part spans.",
+        "",
+        "| Model | Cue span exact F1 | Scope span exact F1 |",
+        "|---|---:|---:|",
+    ])
+    for item in model_metrics:
+        span_metrics = item["exact_span_metrics"]
+        lines.append(
+            f"| {item['model']} | {span_metrics['cue_spans']['f1']:.4f} "
+            f"| {span_metrics['scope_spans']['f1']:.4f} |"
         )
     lines.extend([
         "",
