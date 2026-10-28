@@ -41,6 +41,14 @@ def test_aer_norm_and_phase_readout_control():
     assert tvd(np.abs(mixed)**2, np.abs(mixed_no_phase)**2) > 1e-4
 
 
+def test_hardware_basis_transpilation_exposes_entangling_gate_cost():
+    backend = AerSimulator(method="statevector", precision="double")
+    _, meta = simulate(build_circuit(4, 1, "nearest", 11), backend, 11)
+    assert meta["aer_compiled_cry_count"] == 3
+    assert meta["basis_cx_count"] > 0
+    assert meta["basis_gate_count_rz_sx_x_cx"] >= meta["basis_cx_count"]
+
+
 def test_local_circuit_has_zero_central_cut_entropy():
     backend = AerSimulator(method="statevector", precision="double")
     state, _ = simulate(build_circuit(4, 2, "local", 29), backend, 29)
