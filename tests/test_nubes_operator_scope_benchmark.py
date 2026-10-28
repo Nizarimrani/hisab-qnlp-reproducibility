@@ -154,6 +154,9 @@ def test_repeated_split_runner_aggregates_seeded_results(tmp_path, monkeypatch):
                 "cue_spans": {"f1": seed / 100.0},
                 "scope_spans": {"f1": (seed + 10) / 100.0},
             },
+            "brat_linked_scope_metrics": {
+                "overall": {"f1": (seed + 20) / 100.0},
+            },
         }
         return {
             "data": {
@@ -178,8 +181,11 @@ def test_repeated_split_runner_aggregates_seeded_results(tmp_path, monkeypatch):
         seeds=[10, 20, 30],
     )
     assert report["seed_values"] == [10, 20, 30]
-    assert report["aggregate_metrics"]["hybrid"]["accuracy"]["mean"] == 0.2
-    assert report["aggregate_metrics"]["hybrid"]["accuracy"]["sample_standard_deviation"] == 0.1
+    import pytest
+
+    assert report["aggregate_metrics"]["hybrid"]["accuracy"]["mean"] == pytest.approx(0.2)
+    assert report["aggregate_metrics"]["hybrid"]["accuracy"]["sample_standard_deviation"] == pytest.approx(0.1)
+    assert report["aggregate_metrics"]["hybrid"]["brat_linked_scope_target_exact_f1"]["mean"] == pytest.approx(0.4)
     assert (tmp_path / "repeated" / "REPORT.md").exists()
     assert (tmp_path / "repeated" / "repeated_split_metrics.json").exists()
 
