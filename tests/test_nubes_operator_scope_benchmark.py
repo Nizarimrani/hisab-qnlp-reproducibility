@@ -6,6 +6,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.run_nubes_operator_scope_benchmark import (  # noqa: E402
+    hisab_operator_pipeline,
     load_document,
     parse_brat,
     split_by_document,
@@ -67,3 +68,33 @@ def test_document_split_has_no_file_overlap():
     train, test = split_by_document(docs, 0.2)
     assert {d["doc_id"] for d in train}.isdisjoint({d["doc_id"] for d in test})
     assert len(test) == 2
+
+
+def test_hisab_inspired_pipeline_detects_simple_cues_and_local_scope():
+    tokens = [
+        {"token": "No", "lower": "no", "line": 0, "label": "O"},
+        {"token": "presenta", "lower": "presenta", "line": 0, "label": "O"},
+        {"token": "fiebre", "lower": "fiebre", "line": 0, "label": "O"},
+        {"token": ".", "lower": ".", "line": 0, "label": "O"},
+        {"token": "Puede", "lower": "puede", "line": 1, "label": "O"},
+        {"token": "mejorar", "lower": "mejorar", "line": 1, "label": "O"},
+        {"token": ".", "lower": ".", "line": 1, "label": "O"},
+    ]
+    predicted = hisab_operator_pipeline(tokens)
+    assert predicted == [
+        "NEG_CUE", "NEG_SCOPE", "NEG_SCOPE", "O",
+        "UNCERT_CUE", "UNCERT_SCOPE", "O",
+    ]
+
+
+def test_hisab_inspired_pipeline_never_reads_gold_labels():
+    tokens = [
+        {"token": "No", "lower": "no", "line": 0, "label": "NEG_CUE"},
+        {"token": "fiebre", "lower": "fiebre", "line": 0, "label": "NEG_SCOPE"},
+        {"token": ".", "lower": ".", "line": 0, "label": "O"},
+    ]
+    first = hisab_operator_pipeline(tokens)
+    altered = [dict(token) for token in tokens]
+    for token in altered:
+        token["label"] = "UNCERT_CUE" if token["label"] == "O" else "O"
+    assert hisab_operator_pipeline(altered) == first
